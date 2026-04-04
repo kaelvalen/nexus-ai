@@ -1,0 +1,13 @@
+node_modules/
+dist/
+.DS_Store
+*.local
+
+# Tauri
+src-tauri/target/
+src-tauri/WixTools/
+
+# Env
+.env
+.env.*
+!.env.example
