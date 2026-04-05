@@ -10,12 +10,18 @@ function generateId() {
 
 export function Taskbar() {
   const [tools, setTools] = useState<ToolDef[]>([])
+  const [toolsError, setToolsError] = useState<string | null>(null)
   const { windows, openWindow, restoreWindow } = useWindowStore()
   const { createSession, addMessage, appendToLastToolMessage, setActive, sessions } =
     useSessionStore()
 
   useEffect(() => {
-    listTools().then(setTools).catch(console.error)
+    listTools()
+      .then(setTools)
+      .catch((e) => {
+        console.error('listTools failed:', e)
+        setToolsError(String(e))
+      })
   }, [])
 
   // Global event listeners for tool output/exit
@@ -139,6 +145,15 @@ export function Taskbar() {
 
       {/* Tool buttons */}
       <div className="flex flex-col gap-1 w-full px-2">
+        {toolsError && (
+          <div
+            className="text-red-400 text-xs px-1 break-all cursor-pointer"
+            title={toolsError}
+            onClick={() => listTools().then(setTools).catch(() => {})}
+          >
+            ERR: {toolsError.slice(0, 40)}
+          </div>
+        )}
         {tools.map((tool) => {
           const toolSessions = activeSessions.filter((s) => s.toolId === tool.id)
           return (

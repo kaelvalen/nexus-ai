@@ -8,6 +8,10 @@ pub struct ToolDef {
     pub args: Vec<String>,
     pub mode: ToolMode,
     pub icon: String,
+    /// CLI flag used to pass a prompt non-interactively, e.g. "-p" or "--prompt".
+    /// If Some, workflow steps invoke: binary [args] <flag> <prompt>
+    /// If None, falls back to stdin piping.
+    pub oneshot_flag: Option<String>,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
@@ -26,6 +30,7 @@ pub fn get_tool_definitions() -> Vec<ToolDef> {
             args: vec![],
             mode: ToolMode::Repl,
             icon: "⬡".into(),
+            oneshot_flag: Some("-p".into()),
         },
         ToolDef {
             id: "gemini".into(),
@@ -34,6 +39,7 @@ pub fn get_tool_definitions() -> Vec<ToolDef> {
             args: vec![],
             mode: ToolMode::Repl,
             icon: "◈".into(),
+            oneshot_flag: Some("-p".into()),
         },
         ToolDef {
             id: "qwen-code".into(),
@@ -42,6 +48,7 @@ pub fn get_tool_definitions() -> Vec<ToolDef> {
             args: vec![],
             mode: ToolMode::Repl,
             icon: "◎".into(),
+            oneshot_flag: None,
         },
         ToolDef {
             id: "aider".into(),
@@ -50,6 +57,7 @@ pub fn get_tool_definitions() -> Vec<ToolDef> {
             args: vec!["--no-pretty".into()],
             mode: ToolMode::Repl,
             icon: "⟁".into(),
+            oneshot_flag: None,
         },
         ToolDef {
             id: "gh-copilot".into(),
@@ -63,6 +71,7 @@ pub fn get_tool_definitions() -> Vec<ToolDef> {
             ],
             mode: ToolMode::OneShot,
             icon: "⊕".into(),
+            oneshot_flag: Some("--prompt".into()),
         },
         ToolDef {
             id: "cursor".into(),
@@ -71,6 +80,7 @@ pub fn get_tool_definitions() -> Vec<ToolDef> {
             args: vec![".".into()],
             mode: ToolMode::Launcher,
             icon: "▷".into(),
+            oneshot_flag: None,
         },
         ToolDef {
             id: "windsurf".into(),
@@ -79,6 +89,7 @@ pub fn get_tool_definitions() -> Vec<ToolDef> {
             args: vec![".".into()],
             mode: ToolMode::Launcher,
             icon: "≋".into(),
+            oneshot_flag: None,
         },
     ]
 }

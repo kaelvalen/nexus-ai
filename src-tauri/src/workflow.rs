@@ -33,6 +33,9 @@ pub struct WorkflowError {
 }
 
 /// Run a one-shot tool synchronously, returning its stdout.
+/// If the tool has a `oneshot_flag`, the prompt is passed as a CLI argument:
+///   binary [args] <flag> <prompt>
+/// Otherwise falls back to writing the prompt to stdin.
 pub fn run_oneshot(tool_id: &str, prompt: &str) -> Result<String, String> {
     let tool = get_tool_def(tool_id)?;
 
@@ -40,25 +43,36 @@ pub fn run_oneshot(tool_id: &str, prompt: &str) -> Result<String, String> {
         return Err(format!("Tool {} is a Launcher, cannot use in workflow", tool_id));
     }
 
-    let mut child = std::process::Command::new(&tool.binary)
-        .args(&tool.args)
-        .stdin(Stdio::piped())
-        .stdout(Stdio::piped())
-        .stderr(Stdio::null())
-        .spawn()
-        .map_err(|e| format!("Failed to spawn {}: {}", tool.binary, e))?;
+    let output = if let Some(ref flag) = tool.oneshot_flag {
+        // Flag-based invocation: binary [base_args] <flag> <prompt>
+        std::process::Command::new(&tool.binary)
+            .args(&tool.args)
+            .arg(flag)
+            .arg(prompt)
+            .stdin(Stdio::null())
+            .stdout(Stdio::piped())
+            .stderr(Stdio::null())
+            .output()
+            .map_err(|e| format!("Failed to run {}: {}", tool.binary, e))?
+    } else {
+        // Stdin fallback: write prompt then close stdin
+        let mut child = std::process::Command::new(&tool.binary)
+            .args(&tool.args)
+            .stdin(Stdio::piped())
+            .stdout(Stdio::piped())
+            .stderr(Stdio::null())
+            .spawn()
+            .map_err(|e| format!("Failed to spawn {}: {}", tool.binary, e))?;
 
-    if let Some(ref mut stdin) = child.stdin {
-        writeln!(stdin, "{}", prompt).map_err(|e| e.to_string())?;
-        stdin.flush().map_err(|e| e.to_string())?;
-    }
+        if let Some(ref mut stdin) = child.stdin {
+            writeln!(stdin, "{}", prompt).map_err(|e| e.to_string())?;
+        }
+        drop(child.stdin.take());
 
-    // For OneShot mode, close stdin to signal end of input
-    drop(child.stdin.take());
+        child.wait_with_output().map_err(|e| e.to_string())?
+    };
 
-    let output = child.wait_with_output().map_err(|e| e.to_string())?;
-    let stdout = String::from_utf8_lossy(&output.stdout).to_string();
-    Ok(stdout)
+    Ok(String::from_utf8_lossy(&output.stdout).to_string())
 }
 
 #[tauri::command]
