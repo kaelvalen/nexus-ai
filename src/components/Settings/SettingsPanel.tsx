@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import { listTools, checkAllTools, checkToolAvailable, type ToolDef, type ToolAvailability } from '../../lib/tauri'
 import { toast } from '../../store/toastStore'
+import { THEMES, applyTheme } from '../../main'
 
 interface BinaryOverride {
   toolId: string
@@ -16,15 +17,6 @@ const FONT_FAMILIES = [
   { label: 'Monospace', value: 'monospace' },
 ]
 
-const ACCENT_COLORS = [
-  { label: 'Neon Green', primary: '#00ff88', secondary: '#00d4ff' },
-  { label: 'Cyan Blue', primary: '#00d4ff', secondary: '#00ff88' },
-  { label: 'Purple', primary: '#c678dd', secondary: '#61afef' },
-  { label: 'Orange', primary: '#f0a500', secondary: '#ff6b6b' },
-  { label: 'Pink', primary: '#ff6b9d', secondary: '#c678dd' },
-  { label: 'White', primary: '#e0e6ed', secondary: '#8ba4b0' },
-]
-
 function buildDefaultOverrides(tools: ToolDef[]): BinaryOverride[] {
   return tools.map((t) => ({ toolId: t.id, binary: t.binary }))
 }
@@ -34,11 +26,6 @@ function mergeOverrides(tools: ToolDef[], saved: BinaryOverride[]): BinaryOverri
     const existing = saved.find((o) => o.toolId === t.id)
     return existing ?? { toolId: t.id, binary: t.binary }
   })
-}
-
-function applyTheme(primary: string, secondary: string) {
-  document.documentElement.style.setProperty('--primary', primary)
-  document.documentElement.style.setProperty('--secondary', secondary)
 }
 
 function applyFont(family: string, size: number) {
@@ -52,10 +39,7 @@ export function SettingsPanel() {
   const [availability, setAvailability] = useState<Record<string, ToolAvailability>>({})
   const [fontSize, setFontSize] = useState(() => parseInt(localStorage.getItem('nexus:font-size') ?? '13'))
   const [fontFamily, setFontFamily] = useState(() => localStorage.getItem('nexus:font-family') ?? FONT_FAMILIES[0].value)
-  const [accentIdx, setAccentIdx] = useState(() => {
-    const saved = localStorage.getItem('nexus:accent-idx')
-    return saved ? parseInt(saved) : 0
-  })
+  const [themeId, setThemeId] = useState(() => localStorage.getItem('nexus:theme-id') ?? 'void')
 
   const refreshAvailability = useCallback((toolIds: string[], binaryMap: Record<string, string>) => {
     toolIds.forEach((id) => {
@@ -84,22 +68,20 @@ export function SettingsPanel() {
     })
   }, [refreshAvailability])
 
-  // Live preview font size
-  useEffect(() => {
-    applyFont(fontFamily, fontSize)
-  }, [fontSize, fontFamily])
+  // Live preview font
+  useEffect(() => { applyFont(fontFamily, fontSize) }, [fontSize, fontFamily])
 
-  // Live preview accent
+  // Live preview theme
   useEffect(() => {
-    const accent = ACCENT_COLORS[accentIdx]
-    if (accent) applyTheme(accent.primary, accent.secondary)
-  }, [accentIdx])
+    const theme = THEMES.find((t) => t.id === themeId)
+    if (theme) applyTheme(theme)
+  }, [themeId])
 
   const saveSettings = () => {
     localStorage.setItem('nexus:binary-overrides', JSON.stringify(overrides))
     localStorage.setItem('nexus:font-size', String(fontSize))
     localStorage.setItem('nexus:font-family', fontFamily)
-    localStorage.setItem('nexus:accent-idx', String(accentIdx))
+    localStorage.setItem('nexus:theme-id', themeId)
     toast.success('Settings saved')
   }
 
@@ -126,6 +108,74 @@ export function SettingsPanel() {
 
   return (
     <div className="settings-panel">
+      {/* Theme */}
+      <section className="settings-section">
+        <h2 className="settings-heading">// THEME</h2>
+        <p className="settings-desc" style={{ marginBottom: 16 }}>
+          Select a complete color palette for the entire interface.
+        </p>
+        <div className="settings-theme-grid">
+          {THEMES.map((t) => (
+            <button
+              key={t.id}
+              className={`settings-theme-card ${themeId === t.id ? 'settings-theme-active' : ''}`}
+              onClick={() => setThemeId(t.id)}
+              title={t.label}
+            >
+              {/* Mini preview */}
+              <div
+                className="settings-theme-preview"
+                style={{ background: t.bg, borderColor: themeId === t.id ? t.primary : t.outline }}
+              >
+                <div className="settings-theme-bar" style={{ background: t.surfaceLowest }} />
+                <div className="settings-theme-window" style={{ background: t.surfaceLow, borderTopColor: t.primary }}>
+                  <div style={{ width: '60%', height: 3, background: t.primary, opacity: 0.8, marginBottom: 2 }} />
+                  <div style={{ width: '80%', height: 2, background: t.muted, opacity: 0.5 }} />
+                  <div style={{ width: '50%', height: 2, background: t.muted, opacity: 0.3, marginTop: 2 }} />
+                </div>
+                <div className="settings-theme-accent" style={{ background: t.primary }} />
+                <div className="settings-theme-accent2" style={{ background: t.secondary }} />
+              </div>
+              <span className="settings-theme-label" style={{ color: themeId === t.id ? t.primary : undefined }}>
+                {t.label}
+              </span>
+            </button>
+          ))}
+        </div>
+      </section>
+
+      {/* Appearance */}
+      <section className="settings-section">
+        <h2 className="settings-heading">// APPEARANCE</h2>
+
+        {/* Font size */}
+        <div className="settings-row" style={{ marginTop: 16 }}>
+          <label className="settings-label">Font size</label>
+          <div className="settings-font-size-row">
+            <button className="settings-font-btn" onClick={() => changeFontSize(-1)}>−</button>
+            <span className="settings-font-value">{fontSize}px</span>
+            <button className="settings-font-btn" onClick={() => changeFontSize(1)}>+</button>
+          </div>
+        </div>
+
+        {/* Font family */}
+        <div className="settings-row" style={{ marginTop: 12 }}>
+          <label className="settings-label">Font family</label>
+          <div className="settings-font-family-row">
+            {FONT_FAMILIES.map((f) => (
+              <button
+                key={f.value}
+                className={`settings-font-family-btn ${fontFamily === f.value ? 'settings-font-family-active' : ''}`}
+                onClick={() => setFontFamily(f.value)}
+                style={{ fontFamily: f.value }}
+              >
+                {f.label}
+              </button>
+            ))}
+          </div>
+        </div>
+      </section>
+
       {/* Binary Overrides */}
       <section className="settings-section">
         <h2 className="settings-heading">// BINARY_OVERRIDES</h2>
@@ -171,57 +221,6 @@ export function SettingsPanel() {
         <button className="settings-link-btn" style={{ marginTop: 10 }} onClick={resetOverrides}>
           ↺ RESET_TO_DEFAULTS
         </button>
-      </section>
-
-      {/* Appearance */}
-      <section className="settings-section">
-        <h2 className="settings-heading">// APPEARANCE</h2>
-
-        {/* Font size */}
-        <div className="settings-row" style={{ marginTop: 16 }}>
-          <label className="settings-label">Font size</label>
-          <div className="settings-font-size-row">
-            <button className="settings-font-btn" onClick={() => changeFontSize(-1)}>−</button>
-            <span className="settings-font-value">{fontSize}px</span>
-            <button className="settings-font-btn" onClick={() => changeFontSize(1)}>+</button>
-          </div>
-        </div>
-
-        {/* Font family */}
-        <div className="settings-row" style={{ marginTop: 12 }}>
-          <label className="settings-label">Font family</label>
-          <div className="settings-font-family-row">
-            {FONT_FAMILIES.map((f) => (
-              <button
-                key={f.value}
-                className={`settings-font-family-btn ${fontFamily === f.value ? 'settings-font-family-active' : ''}`}
-                onClick={() => setFontFamily(f.value)}
-                style={{ fontFamily: f.value }}
-              >
-                {f.label}
-              </button>
-            ))}
-          </div>
-        </div>
-
-        {/* Accent color */}
-        <div className="settings-row" style={{ alignItems: 'flex-start', marginTop: 12 }}>
-          <label className="settings-label">Accent color</label>
-          <div className="settings-accent-row">
-            {ACCENT_COLORS.map((c, i) => (
-              <button
-                key={c.label}
-                className={`settings-accent-btn ${accentIdx === i ? 'settings-accent-active' : ''}`}
-                style={{ '--accent-color': c.primary } as React.CSSProperties}
-                onClick={() => setAccentIdx(i)}
-                title={c.label}
-              >
-                <span className="settings-accent-swatch" style={{ background: c.primary }} />
-                <span className="settings-accent-label">{c.label}</span>
-              </button>
-            ))}
-          </div>
-        </div>
       </section>
 
       {/* Keyboard shortcuts */}
