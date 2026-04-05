@@ -40,18 +40,20 @@ pub async fn spawn_tool(
     app: AppHandle,
     session_id: String,
     tool_id: String,
+    binary_override: Option<String>,
     state: tauri::State<'_, Arc<ProcessManager>>,
 ) -> Result<(), String> {
     let tool = get_tool_def(&tool_id)?;
+    let binary = binary_override.as_deref().unwrap_or(&tool.binary).to_string();
 
     if tool.mode == ToolMode::Launcher {
         // Launcher: just fire and forget, no pipe
-        let mut cmd = std::process::Command::new(&tool.binary);
+        let mut cmd = std::process::Command::new(&binary);
         for arg in &tool.args {
             cmd.arg(arg);
         }
         cmd.spawn()
-            .map_err(|e| format!("Failed to launch {}: {}", tool.binary, e))?;
+            .map_err(|e| format!("Failed to launch {}: {}", binary, e))?;
         return Ok(());
     }
 
@@ -65,7 +67,7 @@ pub async fn spawn_tool(
         })
         .map_err(|e| format!("Failed to open pty: {}", e))?;
 
-    let mut cmd = CommandBuilder::new(&tool.binary);
+    let mut cmd = CommandBuilder::new(&binary);
     for arg in &tool.args {
         cmd.arg(arg);
     }
@@ -73,7 +75,7 @@ pub async fn spawn_tool(
     let child = pair
         .slave
         .spawn_command(cmd)
-        .map_err(|e| format!("Failed to spawn {}: {}", tool.binary, e))?;
+        .map_err(|e| format!("Failed to spawn {}: {}", binary, e))?;
 
     let writer = pair
         .master

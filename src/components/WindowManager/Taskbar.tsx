@@ -37,18 +37,38 @@ export function Taskbar() {
     }
   }, [appendToLastToolMessage, setActive])
 
+  const getBinaryOverride = (toolId: string): string | undefined => {
+    try {
+      const saved = localStorage.getItem('nexus:binary-overrides')
+      if (!saved) return undefined
+      const overrides: { toolId: string; binary: string }[] = JSON.parse(saved)
+      return overrides.find((o) => o.toolId === toolId)?.binary
+    } catch {
+      return undefined
+    }
+  }
+
   const launchTool = async (tool: ToolDef) => {
     const sessionId = generateId()
     const windowId = `win-${sessionId}`
+    const binaryOverride = getBinaryOverride(tool.id)
+
+    // Launcher tools: fire-and-forget, no terminal window
+    if (tool.mode === 'Launcher') {
+      try {
+        await spawnTool(sessionId, tool.id, binaryOverride)
+      } catch (e) {
+        console.error(`Failed to launch ${tool.name}:`, e)
+      }
+      return
+    }
 
     createSession(sessionId, tool.id, tool.name)
 
-    if (tool.mode !== 'Launcher') {
-      try {
-        await spawnTool(sessionId, tool.id)
-      } catch (e) {
-        addMessage(sessionId, 'tool', `[ERROR] Failed to spawn ${tool.name}: ${e}`)
-      }
+    try {
+      await spawnTool(sessionId, tool.id, binaryOverride)
+    } catch (e) {
+      addMessage(sessionId, 'tool', `[ERROR] Failed to spawn ${tool.name}: ${e}`)
     }
 
     const existing = windows.find((w) => w.id === windowId)

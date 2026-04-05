@@ -48,8 +48,8 @@ export interface WorkflowError {
 export const listTools = () => invoke<ToolDef[]>('list_tools')
 
 // Process commands
-export const spawnTool = (sessionId: string, toolId: string) =>
-  invoke<void>('spawn_tool', { sessionId, toolId })
+export const spawnTool = (sessionId: string, toolId: string, binaryOverride?: string) =>
+  invoke<void>('spawn_tool', { sessionId, toolId, binaryOverride: binaryOverride ?? null })
 
 export const sendInput = (sessionId: string, input: string) =>
   invoke<void>('send_input', { sessionId, input })
