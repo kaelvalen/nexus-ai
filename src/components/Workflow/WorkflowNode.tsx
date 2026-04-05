@@ -14,48 +14,68 @@ export function WorkflowNode({ id, data, selected }: NodeProps) {
   }
 
   return (
-    <div className={`workflow-node ${selected ? 'workflow-node-selected' : ''}`}>
-      <Handle type="target" position={Position.Left} className="workflow-handle" />
+    <div
+      className="workflow-node"
+      style={selected ? { borderLeftColor: 'var(--secondary)', boxShadow: 'var(--glow-secondary)' } : {}}
+    >
+      <Handle type="target" position={Position.Left} style={{ background: 'var(--primary)', border: 'none', width: 8, height: 8 }} />
 
-      <div className="workflow-node-header">
-        <span className="workflow-node-icon">{nodeData.label}</span>
-        <span className="workflow-node-name">{nodeData.toolName}</span>
+      <div className="wf-node-header">
+        <span className="wf-node-icon">{nodeData.label}</span>
+        <span className="wf-node-title">{nodeData.toolName.toUpperCase()}</span>
       </div>
 
-      <div className="workflow-node-body">
-        {editing ? (
-          <div className="flex flex-col gap-2">
-            <textarea
-              className="workflow-prompt-editor"
-              value={prompt}
-              onChange={(e) => setPrompt(e.target.value)}
-              rows={4}
-              placeholder="Prompt template — use {{input}} for previous step output"
-              autoFocus
-            />
-            <div className="flex gap-1 justify-end">
-              <button className="wf-btn wf-btn-cancel" onClick={() => setEditing(false)}>
-                Cancel
-              </button>
-              <button className="wf-btn wf-btn-save" onClick={savePrompt}>
-                Save
-              </button>
-            </div>
+      {editing ? (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginTop: 6 }}>
+          <textarea
+            style={{
+              background: 'var(--surface-lowest)',
+              border: 'none',
+              borderBottom: '1px solid var(--primary)',
+              color: 'var(--text)',
+              fontFamily: 'var(--font-mono)',
+              fontSize: 10,
+              padding: '4px 6px',
+              outline: 'none',
+              resize: 'vertical',
+              minHeight: 60,
+              caretColor: 'var(--primary)',
+            }}
+            value={prompt}
+            onChange={(e) => setPrompt(e.target.value)}
+            rows={3}
+            placeholder="{{input}}"
+            autoFocus
+          />
+          <div style={{ display: 'flex', gap: 4, justifyContent: 'flex-end' }}>
+            <button
+              style={{ background: 'transparent', border: '1px solid var(--outline)', color: 'var(--muted)', fontFamily: 'var(--font-mono)', fontSize: 9, padding: '2px 8px', cursor: 'pointer' }}
+              onClick={() => setEditing(false)}
+            >
+              CANCEL
+            </button>
+            <button
+              style={{ background: 'var(--primary)', border: 'none', color: '#000', fontFamily: 'var(--font-mono)', fontSize: 9, fontWeight: 700, padding: '2px 8px', cursor: 'pointer' }}
+              onClick={savePrompt}
+            >
+              SAVE
+            </button>
           </div>
-        ) : (
-          <div
-            className="workflow-prompt-preview"
-            onClick={() => setEditing(true)}
-            title="Click to edit prompt"
-          >
-            {nodeData.promptTemplate || (
-              <span className="text-muted italic">Click to set prompt template...</span>
-            )}
-          </div>
-        )}
-      </div>
+        </div>
+      ) : (
+        <div
+          className="wf-node-prompt"
+          onClick={() => setEditing(true)}
+          title="Click to edit prompt template"
+          style={{ cursor: 'text', marginTop: 4 }}
+        >
+          {nodeData.promptTemplate || (
+            <span style={{ color: 'var(--outline)', fontStyle: 'italic' }}>click to set prompt…</span>
+          )}
+        </div>
+      )}
 
-      <Handle type="source" position={Position.Right} className="workflow-handle" />
+      <Handle type="source" position={Position.Right} style={{ background: 'var(--primary)', border: 'none', width: 8, height: 8 }} />
     </div>
   )
 }

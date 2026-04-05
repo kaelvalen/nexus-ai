@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useWindowStore } from '../../store/windowStore'
 import { useSessionStore } from '../../store/sessionStore'
-import { listTools, spawnTool, killSession, isTauri, type ToolDef } from '../../lib/tauri'
+import { listTools, checkAllTools, spawnTool, killSession, isTauri, type ToolDef, type ToolAvailability } from '../../lib/tauri'
 import { toast } from '../../store/toastStore'
 
 function generateId() {
@@ -19,13 +19,21 @@ interface TaskbarProps {
 export function Taskbar({ onOpenPalette }: TaskbarProps) {
   const [tools, setTools] = useState<ToolDef[]>([])
   const [toolsError, setToolsError] = useState<string | null>(null)
+  const [availability, setAvailability] = useState<Record<string, ToolAvailability>>({})
   const { windows, openWindow, focusWindow, restoreWindow, closeWindow } = useWindowStore()
   const { createSession, addMessage, sessions, setActive, removeSession } = useSessionStore()
 
   useEffect(() => {
     const load = () =>
       listTools()
-        .then(setTools)
+        .then((ts) => {
+          setTools(ts)
+          checkAllTools().then((avail) => {
+            const map: Record<string, ToolAvailability> = {}
+            avail.forEach((a) => { map[a.tool_id] = a })
+            setAvailability(map)
+          }).catch(() => {})
+        })
         .catch((e) => {
           console.error('listTools failed:', e)
           setToolsError(String(e))
@@ -68,7 +76,7 @@ export function Taskbar({ onOpenPalette }: TaskbarProps) {
     createSession(sessionId, tool.id, tool.name)
 
     try {
-      await spawnTool(sessionId, tool.id, binaryOverride)
+      await spawnTool(sessionId, tool.id, binaryOverride, 24, 220)
     } catch (e) {
       addMessage(sessionId, 'tool', `[ERROR] Failed to spawn ${tool.name}: ${e}`)
       toast.error(`Failed to spawn ${tool.name}`, String(e))
@@ -199,14 +207,16 @@ export function Taskbar({ onOpenPalette }: TaskbarProps) {
                   <button
                     className="taskbar-btn w-full"
                     onClick={() => launchTool(tool)}
-                    title={`New ${tool.name} session`}
+                    title={`New ${tool.name} session${availability[tool.id] ? (availability[tool.id].available ? ` — ${availability[tool.id].resolved_path}` : ` — NOT FOUND: ${availability[tool.id].error}`) : ''}`}
                   >
                     <span className="tool-icon">{tool.icon}</span>
                     <span className="tool-label flex-1 text-left">{tool.name}</span>
                     {activeSessions.length > 0 && (
                       <span className="session-badge">{activeSessions.length}</span>
                     )}
-                    <span className="tool-launch-arrow" style={{ fontSize: 9, opacity: 0.4 }}>+</span>
+                    {availability[tool.id] && (
+                      <span className={`tool-avail-dot ${availability[tool.id].available ? 'avail-ok' : 'avail-miss'}`} />
+                    )}
                   </button>
                   {toolSessions.length > 0 && (
                     <div className="flex flex-col gap-0 pl-3 pr-1 mb-1">
@@ -249,10 +259,13 @@ export function Taskbar({ onOpenPalette }: TaskbarProps) {
                 key={tool.id}
                 className="taskbar-btn w-full"
                 onClick={() => launchTool(tool)}
-                title={`Open ${tool.name}`}
+                title={`Open ${tool.name}${availability[tool.id] ? (availability[tool.id].available ? '' : ` — NOT FOUND`) : ''}`}
               >
                 <span className="tool-icon">{tool.icon}</span>
                 <span className="tool-label flex-1 text-left">{tool.name}</span>
+                {availability[tool.id] && (
+                  <span className={`tool-avail-dot ${availability[tool.id].available ? 'avail-ok' : 'avail-miss'}`} />
+                )}
                 <span className="tool-launch-arrow">↗</span>
               </button>
             ))}

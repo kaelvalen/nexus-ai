@@ -11,7 +11,7 @@ interface Props {
   toolId: string
 }
 
-export function TerminalWindow({ sessionId, toolId }: Props) {
+export function TerminalWindow({ sessionId, toolId: _toolId }: Props) {
   const { sessions, setActive } = useSessionStore()
   const session = sessions[sessionId]
   const containerRef = useRef<HTMLDivElement>(null)
@@ -132,29 +132,28 @@ export function TerminalWindow({ sessionId, toolId }: Props) {
 
   if (!session) {
     return (
-      <div className="flex items-center justify-center h-full text-muted text-xs font-mono">
-        Session not found: {sessionId}
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', color: 'var(--muted)', fontSize: 11, fontFamily: 'var(--font-mono)' }}>
+        SESSION NOT FOUND: {sessionId}
       </div>
     )
   }
 
   return (
-    <div className="terminal-window flex flex-col h-full">
+    <div className="terminal-window">
       {/* Header */}
-      <div className="terminal-header flex items-center gap-2 px-3 py-1.5">
-        <span className="text-secondary text-xs font-mono font-semibold">{session.toolName}</span>
-        <span className="text-muted text-xs font-mono">#{sessionId.slice(0, 8)}</span>
-        <span className={`session-status ${session.active ? 'status-active' : 'status-dead'}`}>
-          {session.active ? '● live' : '○ ended'}
+      <div className="terminal-header">
+        <span className="mat mat-sm" style={{ color: session.active ? 'var(--primary)' : 'var(--muted)' }}>terminal</span>
+        <span style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.18em', textTransform: 'uppercase', color: session.active ? 'var(--primary)' : 'var(--muted)' }}>
+          {session.toolName}
         </span>
-        <div className="flex-1" />
-        <span className="text-muted text-xs font-mono">{toolId}</span>
-        <button
-          className="terminal-action-btn"
-          onClick={handleCopy}
-          title="Copy selection or all"
-        >
-          ⎘ copy
+        <span style={{ fontSize: 8, color: 'var(--muted)', letterSpacing: '0.05em' }}>#{sessionId.slice(0, 8)}</span>
+        <span className={`session-status-badge ${session.active ? 'status-live' : 'status-dead'}`}>
+          {session.active ? '● LIVE' : '○ ENDED'}
+        </span>
+        <div style={{ flex: 1 }} />
+        <button className="terminal-action-btn" onClick={handleCopy} title="Copy selection or buffer">
+          <span className="mat mat-sm">content_copy</span>
+          COPY
         </button>
         <button
           className="terminal-action-btn terminal-action-btn-danger"
@@ -162,16 +161,22 @@ export function TerminalWindow({ sessionId, toolId }: Props) {
           disabled={!session.active}
           title="Kill session"
         >
-          ✕ kill
+          <span className="mat mat-sm">stop_circle</span>
+          KILL
         </button>
       </div>
 
       {/* xterm.js container */}
-      <div
-        ref={containerRef}
-        className="flex-1 min-h-0"
-        style={{ padding: '4px 2px' }}
-      />
+      <div ref={containerRef} className="flex-1 min-h-0" style={{ padding: '2px' }} />
+
+      {/* Bottom telemetry ribbon */}
+      <div className="win-ribbon">
+        <div style={{ display: 'flex', gap: 16 }}>
+          <span>BUFFER: {session.toolName.toUpperCase()}</span>
+          <span>SESSION: {sessionId.slice(0, 12)}</span>
+        </div>
+        <span>UTF-8 | {session.active ? 'RUNNING' : 'EXITED'}</span>
+      </div>
     </div>
   )
 }

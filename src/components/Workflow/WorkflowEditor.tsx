@@ -18,9 +18,11 @@ import { WorkflowNode as WorkflowNodeComponent } from './WorkflowNode'
 import {
   listTools,
   executeWorkflow,
+  cancelWorkflow,
   onWorkflowStep,
   onWorkflowComplete,
   onWorkflowError,
+  onWorkflowCancelled,
   type ToolDef,
 } from '../../lib/tauri'
 
@@ -36,13 +38,15 @@ interface LogEntry {
 }
 
 export function WorkflowEditor() {
-  const { nodes, edges, setNodes, setEdges, addNode, startRun, addRunStep, completeRun, failRun } =
+  const { nodes, edges, setNodes, setEdges, addNode, startRun, addRunStep, completeRun, failRun, savePreset, loadPreset, deletePreset, presets } =
     useWorkflowStore()
   const [tools, setTools] = useState<ToolDef[]>([])
   const [initialInput, setInitialInput] = useState('')
   const [activeRunId, setActiveRunId] = useState<string | null>(null)
   const [runLog, setRunLog] = useState<LogEntry[]>([])
   const [logExpanded, setLogExpanded] = useState(true)
+  const [presetName, setPresetName] = useState('')
+  const [showPresets, setShowPresets] = useState(false)
 
   useEffect(() => {
     listTools().then((ts) => setTools(ts.filter((t) => t.mode !== 'Launcher'))).catch(console.error)
@@ -53,6 +57,8 @@ export function WorkflowEditor() {
     let unComplete: (() => void) | null = null
     let unError: (() => void) | null = null
 
+    let unCancelled: (() => void) | null = null
+
     onWorkflowStep((result) => {
       addRunStep(result.workflow_id, {
         stepIndex: result.step_index,
@@ -60,15 +66,17 @@ export function WorkflowEditor() {
         input: result.input,
         output: result.output,
       })
+      const ms = result.elapsed_ms
+      const elapsed = ms > 1000 ? `${(ms / 1000).toFixed(1)}s` : `${ms}ms`
       setRunLog((l) => [
         ...l,
-        { text: `Step ${result.step_index + 1} · ${result.tool_id}: ${result.output.slice(0, 140)}…`, type: 'step' },
+        { text: `Step ${result.step_index + 1} [${result.tool_id}] (${elapsed}): ${result.output.slice(0, 120)}…`, type: 'step' },
       ])
     }).then((fn) => { unStep = fn })
 
     onWorkflowComplete((result) => {
       completeRun(result.workflow_id)
-      setRunLog((l) => [...l, { text: `✓ Complete — ${result.final_output.slice(0, 200)}`, type: 'success' }])
+      setRunLog((l) => [...l, { text: `✓ Done (${result.total_steps} steps) — ${result.final_output.slice(0, 200)}`, type: 'success' }])
       setActiveRunId(null)
     }).then((fn) => { unComplete = fn })
 
@@ -78,10 +86,16 @@ export function WorkflowEditor() {
       setActiveRunId(null)
     }).then((fn) => { unError = fn })
 
+    onWorkflowCancelled((result) => {
+      setRunLog((l) => [...l, { text: `⊘ Workflow ${result.workflow_id.slice(0, 8)} cancelled`, type: 'info' }])
+      setActiveRunId(null)
+    }).then((fn) => { unCancelled = fn })
+
     return () => {
       unStep?.()
       unComplete?.()
       unError?.()
+      unCancelled?.()
     }
   }, [addRunStep, completeRun, failRun])
 
@@ -178,9 +192,9 @@ export function WorkflowEditor() {
   const hasSelectedNodes = nodes.some((n) => (n as WorkflowNode & { selected?: boolean }).selected)
 
   return (
-    <div className="workflow-editor flex flex-col h-full">
+    <div className="workflow-editor">
       {/* Toolbar */}
-      <div className="workflow-toolbar flex items-center gap-2 px-3 py-2 flex-wrap">
+      <div className="workflow-toolbar">
         <span className="wf-section-label">Add Node</span>
         {tools.map((tool) => (
           <button
@@ -212,6 +226,80 @@ export function WorkflowEditor() {
             ⌫ Clear
           </button>
         )}
+        {/* Presets */}
+        <div className="wf-preset-group">
+          <button
+            className="wf-preset-toggle"
+            onClick={() => setShowPresets((v) => !v)}
+            title="Workflow presets"
+          >
+            ⊟ Presets
+          </button>
+          {showPresets && (
+            <div className="wf-preset-panel">
+              <div className="wf-preset-save-row">
+                <input
+                  className="wf-preset-input"
+                  value={presetName}
+                  onChange={(e) => setPresetName(e.target.value)}
+                  placeholder="Preset name…"
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' && presetName.trim()) {
+                      savePreset(presetName.trim())
+                      setPresetName('')
+                    }
+                  }}
+                />
+                <button
+                  className="wf-preset-save-btn"
+                  onClick={() => {
+                    if (presetName.trim()) {
+                      savePreset(presetName.trim())
+                      setPresetName('')
+                    }
+                  }}
+                  disabled={!presetName.trim() || nodes.length === 0}
+                >
+                  Save
+                </button>
+              </div>
+              {Object.values(presets).length === 0 ? (
+                <div className="wf-preset-empty">No saved presets</div>
+              ) : (
+                Object.values(presets)
+                  .sort((a, b) => b.savedAt - a.savedAt)
+                  .map((p) => (
+                    <div key={p.name} className="wf-preset-row">
+                      <button
+                        className="wf-preset-load-btn"
+                        onClick={() => { loadPreset(p.name); setShowPresets(false) }}
+                        title={`Load "${p.name}" (${p.nodes.length} nodes)`}
+                      >
+                        {p.name}
+                        <span className="wf-preset-meta">{p.nodes.length}n · {new Date(p.savedAt).toLocaleDateString()}</span>
+                      </button>
+                      <button
+                        className="wf-preset-delete-btn"
+                        onClick={() => deletePreset(p.name)}
+                        title="Delete preset"
+                      >
+                        ×
+                      </button>
+                    </div>
+                  ))
+              )}
+            </div>
+          )}
+        </div>
+        {activeRunId && (
+          <button
+            className="wf-danger-btn"
+            onClick={() => cancelWorkflow(activeRunId)}
+            title="Cancel running workflow"
+          >
+            ⊘ Cancel
+          </button>
+        )}
         <button
           className="wf-run-btn"
           onClick={runWorkflow}
@@ -222,10 +310,10 @@ export function WorkflowEditor() {
       </div>
 
       {/* Initial input */}
-      <div className="wf-initial-input-bar">
-        <span className="wf-input-label">Initial input</span>
+      <div className="workflow-input-area">
+        <span className="wf-prompt-label">INITIAL_INPUT</span>
         <input
-          className="wf-input-field flex-1"
+          className="wf-prompt-input"
           value={initialInput}
           onChange={(e) => setInitialInput(e.target.value)}
           placeholder="Text to feed into the first step…"
@@ -233,13 +321,11 @@ export function WorkflowEditor() {
       </div>
 
       {/* Flow canvas */}
-      <div className="flex-1 min-h-0 relative">
+      <div className="workflow-canvas">
         {nodes.length === 0 && (
-          <div className="wf-empty-state pointer-events-none">
-            <div className="wf-empty-icon">⇝</div>
-            <div className="wf-empty-title">No nodes yet</div>
-            <div className="wf-empty-hint">Click an "Add Node" button above to start building your workflow</div>
-            <div className="wf-empty-hint">Connect nodes by dragging from one handle to another</div>
+          <div className="wf-empty-state">
+            <div className="wf-empty-title">// NO_NODES</div>
+            <div className="wf-empty-hint">Add nodes from the toolbar above, then connect them</div>
           </div>
         )}
         <ReactFlow
@@ -251,35 +337,29 @@ export function WorkflowEditor() {
           nodeTypes={nodeTypes}
           fitView
           deleteKeyCode="Delete"
-          className="workflow-canvas"
+          style={{ background: 'var(--bg)' }}
         >
-          <Background color="#00ff8822" gap={24} />
-          <Controls className="workflow-controls" />
-          <MiniMap className="workflow-minimap" nodeColor="#00ff88" maskColor="rgba(8,12,16,0.8)" />
+          <Background color="rgba(0,255,136,0.08)" gap={28} size={1} />
+          <Controls style={{ background: 'var(--surface-high)', border: '1px solid var(--outline)' }} />
+          <MiniMap nodeColor="var(--primary)" maskColor="rgba(8,12,16,0.85)" style={{ background: 'var(--surface-lowest)', border: '1px solid var(--outline)' }} />
         </ReactFlow>
       </div>
 
       {/* Run log */}
       {runLog.length > 0 && (
-        <div className="workflow-log-panel">
-          <div
-            className="workflow-log-header"
-            onClick={() => setLogExpanded((v) => !v)}
-          >
-            <span className="wf-section-label" style={{ margin: 0 }}>Run Log</span>
-            <span className="text-muted text-xs">{runLog.length} entries</span>
-            <div className="flex-1" />
-            <button
-              className="wf-log-toggle"
-              title={logExpanded ? 'Collapse' : 'Expand'}
-            >
-              {logExpanded ? '▾' : '▸'}
-            </button>
+        <div className="workflow-log">
+          <div className="wf-log-header" onClick={() => setLogExpanded((v) => !v)}>
+            <span className="wf-log-title">// RUN_LOG</span>
+            <span style={{ fontSize: 9, color: 'var(--muted)' }}>{runLog.length} entries</span>
+            <div style={{ flex: 1 }} />
+            <span className="mat mat-sm" style={{ color: 'var(--muted)', fontSize: 14 }}>
+              {logExpanded ? 'expand_less' : 'expand_more'}
+            </span>
           </div>
           {logExpanded && (
-            <div className="workflow-log-body">
+            <div className="wf-log-entries">
               {runLog.map((entry, i) => (
-                <div key={i} className={`wf-log-line wf-log-${entry.type}`}>
+                <div key={i} className={`wf-log-line ${entry.type}`}>
                   {entry.text}
                 </div>
               ))}

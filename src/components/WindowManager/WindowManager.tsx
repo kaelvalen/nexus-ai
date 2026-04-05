@@ -21,21 +21,20 @@ export function WindowManager() {
   const { windows } = useWindowStore()
 
   return (
-    <div className="absolute inset-0 overflow-hidden pointer-events-none">
+    <div className="absolute inset-0 overflow-hidden">
       {windows.map((win) => (
-        <div key={win.id} className="pointer-events-auto absolute" style={{ left: 0, top: 0, width: '100%', height: '100%' }}>
-          <Window
-            id={win.id}
-            title={win.title}
-            position={win.position}
-            size={win.size}
-            zIndex={win.zIndex}
-            minimized={win.minimized}
-            maximized={win.maximized}
-          >
-            <WindowContent component={win.component} props={win.props} />
-          </Window>
-        </div>
+        <Window
+          key={win.id}
+          id={win.id}
+          title={win.title}
+          position={win.position}
+          size={win.size}
+          zIndex={win.zIndex}
+          minimized={win.minimized}
+          maximized={win.maximized}
+        >
+          <WindowContent component={win.component} props={win.props} />
+        </Window>
       ))}
     </div>
   )

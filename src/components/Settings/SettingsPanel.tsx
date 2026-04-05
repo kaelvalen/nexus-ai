@@ -1,5 +1,5 @@
-import { useState, useEffect } from 'react'
-import { listTools, type ToolDef } from '../../lib/tauri'
+import { useState, useEffect, useCallback } from 'react'
+import { listTools, checkAllTools, checkToolAvailable, type ToolDef, type ToolAvailability } from '../../lib/tauri'
 import { toast } from '../../store/toastStore'
 
 interface BinaryOverride {
@@ -49,6 +49,7 @@ function applyFont(family: string, size: number) {
 export function SettingsPanel() {
   const [tools, setTools] = useState<ToolDef[]>([])
   const [overrides, setOverrides] = useState<BinaryOverride[]>([])
+  const [availability, setAvailability] = useState<Record<string, ToolAvailability>>({})
   const [fontSize, setFontSize] = useState(() => parseInt(localStorage.getItem('nexus:font-size') ?? '13'))
   const [fontFamily, setFontFamily] = useState(() => localStorage.getItem('nexus:font-family') ?? FONT_FAMILIES[0].value)
   const [accentIdx, setAccentIdx] = useState(() => {
@@ -56,17 +57,32 @@ export function SettingsPanel() {
     return saved ? parseInt(saved) : 0
   })
 
+  const refreshAvailability = useCallback((toolIds: string[], binaryMap: Record<string, string>) => {
+    toolIds.forEach((id) => {
+      checkToolAvailable(id, binaryMap[id]).then((res) => {
+        setAvailability((prev) => ({ ...prev, [id]: res }))
+      }).catch(() => {})
+    })
+  }, [])
+
   useEffect(() => {
     listTools().then((ts) => {
       setTools(ts)
       const raw = localStorage.getItem('nexus:binary-overrides')
       const parsed: BinaryOverride[] = raw ? JSON.parse(raw) : []
-      setOverrides(mergeOverrides(ts, parsed))
+      const merged = mergeOverrides(ts, parsed)
+      setOverrides(merged)
+      const binaryMap = Object.fromEntries(merged.map((o) => [o.toolId, o.binary]))
+      checkAllTools().then((avail) => {
+        const map: Record<string, ToolAvailability> = {}
+        avail.forEach((a) => { map[a.tool_id] = a })
+        setAvailability(map)
+      }).catch(() => refreshAvailability(ts.map((t) => t.id), binaryMap))
     }).catch(() => {
       const raw = localStorage.getItem('nexus:binary-overrides')
       if (raw) setOverrides(JSON.parse(raw))
     })
-  }, [])
+  }, [refreshAvailability])
 
   // Live preview font size
   useEffect(() => {
@@ -98,19 +114,25 @@ export function SettingsPanel() {
     )
   }
 
+  const recheckOverride = (toolId: string, binary: string) => {
+    checkToolAvailable(toolId, binary).then((res) => {
+      setAvailability((prev) => ({ ...prev, [toolId]: res }))
+    }).catch(() => {})
+  }
+
   const changeFontSize = (delta: number) => {
     setFontSize((v) => Math.min(20, Math.max(10, v + delta)))
   }
 
   return (
-    <div className="settings-panel overflow-y-auto h-full">
+    <div className="settings-panel">
       {/* Binary Overrides */}
       <section className="settings-section">
-        <h2 className="settings-heading">Binary Overrides</h2>
+        <h2 className="settings-heading">// BINARY_OVERRIDES</h2>
         <p className="settings-desc">
-          Map each tool to its CLI binary. Change these if the default binary name doesn't match your installation.
+          Map each tool to its CLI binary. Change if the default name doesn't match your installation.
         </p>
-        <div className="settings-table mt-4">
+        <div className="settings-table" style={{ marginTop: 16 }}>
           <div className="settings-table-head">
             <span>Tool</span>
             <span>Mode</span>
@@ -118,6 +140,7 @@ export function SettingsPanel() {
           </div>
           {overrides.map((o) => {
             const tool = tools.find((t) => t.id === o.toolId)
+            const avail = availability[o.toolId]
             return (
               <div key={o.toolId} className="settings-table-row">
                 <span className="settings-tool-name">
@@ -125,28 +148,37 @@ export function SettingsPanel() {
                   {o.toolId}
                 </span>
                 <span className="settings-tool-mode">{tool?.mode ?? '—'}</span>
-                <input
-                  className="settings-input"
-                  value={o.binary}
-                  onChange={(e) => updateOverride(o.toolId, e.target.value)}
-                  spellCheck={false}
-                  placeholder="binary name or absolute path"
-                />
+                <div className="settings-input-row">
+                  <input
+                    className="settings-input"
+                    value={o.binary}
+                    onChange={(e) => updateOverride(o.toolId, e.target.value)}
+                    onBlur={(e) => recheckOverride(o.toolId, e.target.value)}
+                    spellCheck={false}
+                    placeholder="binary name or absolute path"
+                  />
+                  {avail && (
+                    <span
+                      className={`settings-avail-dot ${avail.available ? 'avail-ok' : 'avail-miss'}`}
+                      title={avail.available ? avail.resolved_path ?? 'found' : avail.error ?? 'not found'}
+                    />
+                  )}
+                </div>
               </div>
             )
           })}
         </div>
-        <button className="settings-link-btn mt-3" onClick={resetOverrides}>
-          ↺ Reset to defaults
+        <button className="settings-link-btn" style={{ marginTop: 10 }} onClick={resetOverrides}>
+          ↺ RESET_TO_DEFAULTS
         </button>
       </section>
 
       {/* Appearance */}
       <section className="settings-section">
-        <h2 className="settings-heading">Appearance</h2>
+        <h2 className="settings-heading">// APPEARANCE</h2>
 
         {/* Font size */}
-        <div className="settings-row mt-4">
+        <div className="settings-row" style={{ marginTop: 16 }}>
           <label className="settings-label">Font size</label>
           <div className="settings-font-size-row">
             <button className="settings-font-btn" onClick={() => changeFontSize(-1)}>−</button>
@@ -156,7 +188,7 @@ export function SettingsPanel() {
         </div>
 
         {/* Font family */}
-        <div className="settings-row mt-3">
+        <div className="settings-row" style={{ marginTop: 12 }}>
           <label className="settings-label">Font family</label>
           <div className="settings-font-family-row">
             {FONT_FAMILIES.map((f) => (
@@ -173,7 +205,7 @@ export function SettingsPanel() {
         </div>
 
         {/* Accent color */}
-        <div className="settings-row mt-3" style={{ alignItems: 'flex-start' }}>
+        <div className="settings-row" style={{ alignItems: 'flex-start', marginTop: 12 }}>
           <label className="settings-label">Accent color</label>
           <div className="settings-accent-row">
             {ACCENT_COLORS.map((c, i) => (
@@ -194,8 +226,8 @@ export function SettingsPanel() {
 
       {/* Keyboard shortcuts */}
       <section className="settings-section">
-        <h2 className="settings-heading">Keyboard Shortcuts</h2>
-        <div className="settings-shortcuts mt-3">
+        <h2 className="settings-heading">// KEYBINDINGS</h2>
+        <div className="settings-shortcuts" style={{ marginTop: 12 }}>
           {[
             ['Ctrl+K', 'Open Command Palette'],
             ['Ctrl+W', 'Close focused window'],
@@ -215,12 +247,12 @@ export function SettingsPanel() {
 
       {/* About */}
       <section className="settings-section">
-        <h2 className="settings-heading">About</h2>
-        <div className="settings-desc space-y-1 mt-2">
-          <p><span className="text-primary font-bold">NEXUS</span> v0.1.0</p>
-          <p className="text-muted">AI Developer OS — Tauri v2 + React + Rust</p>
-          <p className="text-muted text-xs mt-2">
-            All tools run as local CLI processes. No API keys. No cloud. Everything stays on your machine.
+        <h2 className="settings-heading">// ABOUT</h2>
+        <div className="settings-desc" style={{ marginTop: 8, display: 'flex', flexDirection: 'column', gap: 4 }}>
+          <p><span style={{ color: 'var(--primary)', fontWeight: 700 }}>NEXUS_AI_OS</span> v0.1.0</p>
+          <p>AI Developer OS — Tauri v2 + React + Rust</p>
+          <p style={{ marginTop: 6, fontSize: 9, color: 'var(--muted)' }}>
+            All tools run as local CLI processes. No API keys. No cloud.
           </p>
         </div>
       </section>

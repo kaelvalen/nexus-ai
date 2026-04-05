@@ -22,10 +22,35 @@ export interface WorkflowRun {
   error?: string
 }
 
+export interface WorkflowPreset {
+  name: string
+  savedAt: number
+  nodes: WorkflowNode[]
+  edges: Edge[]
+}
+
+const STORAGE_KEY = 'nexus:workflow-presets'
+
+function loadPresets(): Record<string, WorkflowPreset> {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY)
+    return raw ? JSON.parse(raw) : {}
+  } catch {
+    return {}
+  }
+}
+
+function savePresetsToStorage(presets: Record<string, WorkflowPreset>) {
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(presets))
+  } catch {}
+}
+
 interface WorkflowStore {
   nodes: WorkflowNode[]
   edges: Edge[]
   runs: Record<string, WorkflowRun>
+  presets: Record<string, WorkflowPreset>
   setNodes: (nodes: WorkflowNode[]) => void
   setEdges: (edges: Edge[]) => void
   addNode: (node: WorkflowNode) => void
@@ -34,12 +59,16 @@ interface WorkflowStore {
   addRunStep: (runId: string, step: WorkflowRun['steps'][0]) => void
   completeRun: (runId: string) => void
   failRun: (runId: string, error: string) => void
+  savePreset: (name: string) => void
+  loadPreset: (name: string) => void
+  deletePreset: (name: string) => void
 }
 
-export const useWorkflowStore = create<WorkflowStore>((set) => ({
+export const useWorkflowStore = create<WorkflowStore>((set, get) => ({
   nodes: [],
   edges: [],
   runs: {},
+  presets: loadPresets(),
 
   setNodes: (nodes) => set({ nodes }),
   setEdges: (edges) => set({ edges }),
@@ -86,4 +115,29 @@ export const useWorkflowStore = create<WorkflowStore>((set) => ({
         runs: { ...state.runs, [runId]: { ...run, complete: true, error } },
       }
     }),
+
+  savePreset: (name) => {
+    const { nodes, edges, presets } = get()
+    const updated = {
+      ...presets,
+      [name]: { name, savedAt: Date.now(), nodes, edges },
+    }
+    savePresetsToStorage(updated)
+    set({ presets: updated })
+  },
+
+  loadPreset: (name) => {
+    const { presets } = get()
+    const preset = presets[name]
+    if (!preset) return
+    set({ nodes: preset.nodes, edges: preset.edges })
+  },
+
+  deletePreset: (name) => {
+    const { presets } = get()
+    const updated = { ...presets }
+    delete updated[name]
+    savePresetsToStorage(updated)
+    set({ presets: updated })
+  },
 }))

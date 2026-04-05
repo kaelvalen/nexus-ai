@@ -208,46 +208,127 @@ export function CommandPalette({ open, onClose }: Props) {
   if (!open) return null
 
   return (
-    <div className="cmd-overlay" onClick={onClose}>
-      <div className="cmd-palette" onClick={(e) => e.stopPropagation()}>
-        <div className="cmd-input-row">
-          <span className="cmd-search-icon">⌕</span>
+    <div className="palette-backdrop" onClick={onClose}>
+      <div className="palette-panel" onClick={(e) => e.stopPropagation()}>
+        {/* Search row */}
+        <div className="palette-search-row">
+          <span className="mat">search</span>
           <input
             ref={inputRef}
-            className="cmd-input"
-            placeholder="Type a command or search…"
+            className="palette-input"
+            placeholder="Type a command or search tools…"
             value={query}
             onChange={(e) => { setQuery(e.target.value); setSelected(0) }}
             onKeyDown={handleKey}
             spellCheck={false}
           />
-          <span className="cmd-esc-hint">ESC</span>
+          <span className="palette-kbd">ESC</span>
         </div>
-        <div className="cmd-list">
+
+        {/* Results */}
+        <div className="palette-results">
           {filtered.length === 0 && (
-            <div className="cmd-empty">No matching commands</div>
+            <div className="palette-empty">No matching commands</div>
           )}
-          {filtered.map((cmd, i) => (
-            <button
-              key={cmd.id}
-              className={`cmd-item ${i === selected ? 'cmd-item-selected' : ''}`}
-              onClick={cmd.action}
-              onMouseEnter={() => setSelected(i)}
-            >
-              <span className="cmd-item-icon">{cmd.icon}</span>
-              <span className="cmd-item-label">{cmd.label}</span>
-              {cmd.description && (
-                <span className="cmd-item-desc">{cmd.description}</span>
+          {filtered.length > 0 && (
+            <>
+              {/* Tools group */}
+              {filtered.some((c) => c.id.startsWith('launch-')) && (
+                <div className="palette-section-label">LAUNCH</div>
               )}
-            </button>
-          ))}
+              {filtered.filter((c) => c.id.startsWith('launch-')).map((cmd) => {
+                const globalIdx = filtered.indexOf(cmd)
+                const tool = tools.find((t) => `launch-${t.id}` === cmd.id)
+                return (
+                  <button
+                    key={cmd.id}
+                    className={`palette-item ${globalIdx === selected ? 'focused' : ''}`}
+                    onClick={cmd.action}
+                    onMouseEnter={() => setSelected(globalIdx)}
+                  >
+                    <span className="palette-item-icon">{cmd.icon}</span>
+                    <span className="palette-item-body">
+                      <span className="palette-item-title">{cmd.label}</span>
+                      <span className="palette-item-sub">{cmd.description}</span>
+                    </span>
+                    {tool && modeband(tool)}
+                  </button>
+                )
+              })}
+
+              {/* Windows group */}
+              {filtered.some((c) => c.id.startsWith('focus-') || c.id.startsWith('close-') || c.id.startsWith('restore-')) && (
+                <div className="palette-section-label">WINDOWS</div>
+              )}
+              {filtered.filter((c) => c.id.startsWith('focus-') || c.id.startsWith('close-') || c.id.startsWith('restore-')).map((cmd) => {
+                const globalIdx = filtered.indexOf(cmd)
+                return (
+                  <button
+                    key={cmd.id}
+                    className={`palette-item ${globalIdx === selected ? 'focused' : ''}`}
+                    onClick={cmd.action}
+                    onMouseEnter={() => setSelected(globalIdx)}
+                  >
+                    <span className="palette-item-icon secondary">
+                      <span className="mat mat-sm">
+                        {cmd.id.startsWith('focus-') ? 'tab_unselected' : cmd.id.startsWith('restore-') ? 'flip_to_front' : 'close'}
+                      </span>
+                    </span>
+                    <span className="palette-item-body">
+                      <span className="palette-item-title">{cmd.label}</span>
+                      <span className="palette-item-sub">{cmd.description}</span>
+                    </span>
+                  </button>
+                )
+              })}
+
+              {/* System commands */}
+              {filtered.some((c) => c.id === 'workflow-editor' || c.id === 'settings') && (
+                <div className="palette-section-label">SYSTEM</div>
+              )}
+              {filtered.filter((c) => c.id === 'workflow-editor' || c.id === 'settings').map((cmd) => {
+                const globalIdx = filtered.indexOf(cmd)
+                return (
+                  <button
+                    key={cmd.id}
+                    className={`palette-item ${globalIdx === selected ? 'focused' : ''}`}
+                    onClick={cmd.action}
+                    onMouseEnter={() => setSelected(globalIdx)}
+                  >
+                    <span className="palette-item-icon tertiary">
+                      <span className="mat mat-sm">{cmd.id === 'settings' ? 'settings' : 'account_tree'}</span>
+                    </span>
+                    <span className="palette-item-body">
+                      <span className="palette-item-title">{cmd.label}</span>
+                      <span className="palette-item-sub">{cmd.description}</span>
+                    </span>
+                  </button>
+                )
+              })}
+            </>
+          )}
         </div>
-        <div className="cmd-footer">
-          <span>↑↓ navigate</span>
-          <span>↵ select</span>
-          <span>ESC close</span>
+
+        {/* Footer */}
+        <div style={{
+          padding: '6px 16px',
+          display: 'flex', gap: 16,
+          borderTop: '1px solid var(--ghost)',
+          fontSize: 9, color: 'var(--muted)',
+          letterSpacing: '0.1em', fontWeight: 700,
+          textTransform: 'uppercase',
+        }}>
+          <span>↑↓ NAVIGATE</span>
+          <span>↵ SELECT</span>
+          <span>ESC CLOSE</span>
         </div>
       </div>
     </div>
   )
+}
+
+function modeband(tool: ToolDef) {
+  if (tool.mode === 'Launcher') return <span className="palette-item-badge badge-launcher">LAUNCHER</span>
+  if (tool.mode === 'OneShot')  return <span className="palette-item-badge badge-oneshot">ONESHOT</span>
+  return <span className="palette-item-badge badge-repl">REPL</span>
 }

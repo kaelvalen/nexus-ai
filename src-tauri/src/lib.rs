@@ -15,12 +15,15 @@ pub fn run() {
         .manage(process_manager)
         .invoke_handler(tauri::generate_handler![
             tools::list_tools,
+            tools::check_tool_available,
+            tools::check_all_tools,
             process_manager::spawn_tool,
             process_manager::send_input,
             process_manager::resize_pty,
             process_manager::kill_session,
             process_manager::list_sessions,
             workflow::execute_workflow,
+            workflow::cancel_workflow,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
