@@ -53,8 +53,11 @@ export const listTools = () => invoke<ToolDef[]>('list_tools')
 export const spawnTool = (sessionId: string, toolId: string, binaryOverride?: string) =>
   invoke<void>('spawn_tool', { sessionId, toolId, binaryOverride: binaryOverride ?? null })
 
-export const sendInput = (sessionId: string, input: string) =>
-  invoke<void>('send_input', { sessionId, input })
+export const sendInput = (sessionId: string, data: string) =>
+  invoke<void>('send_input', { sessionId, data })
+
+export const resizePty = (sessionId: string, rows: number, cols: number) =>
+  invoke<void>('resize_pty', { sessionId, rows, cols })
 
 export const killSession = (sessionId: string) =>
   invoke<void>('kill_session', { sessionId })

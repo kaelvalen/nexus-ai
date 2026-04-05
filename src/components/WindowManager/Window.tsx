@@ -1,6 +1,8 @@
 import { useRef, useCallback, type ReactNode } from 'react'
 import { useWindowStore } from '../../store/windowStore'
 
+const TASKBAR_WIDTH = 120
+
 interface WindowProps {
   id: string
   title: string
@@ -8,6 +10,7 @@ interface WindowProps {
   size: { width: number; height: number }
   zIndex: number
   minimized: boolean
+  maximized: boolean
   children: ReactNode
 }
 
@@ -18,9 +21,10 @@ export function Window({
   size,
   zIndex,
   minimized,
+  maximized,
   children,
 }: WindowProps) {
-  const { focusWindow, closeWindow, minimizeWindow, moveWindow, resizeWindow } =
+  const { focusWindow, closeWindow, minimizeWindow, maximizeWindow, moveWindow, resizeWindow } =
     useWindowStore()
 
   const dragging = useRef(false)
@@ -31,6 +35,7 @@ export function Window({
   const onTitleMouseDown = useCallback(
     (e: React.MouseEvent) => {
       if (e.button !== 0) return
+      if (maximized) return
       focusWindow(id)
       dragging.current = true
       dragStart.current = {
@@ -55,12 +60,13 @@ export function Window({
       window.addEventListener('mousemove', onMove)
       window.addEventListener('mouseup', onUp)
     },
-    [id, position.x, position.y, focusWindow, moveWindow]
+    [id, position.x, position.y, maximized, focusWindow, moveWindow]
   )
 
   const onResizeMouseDown = useCallback(
     (e: React.MouseEvent) => {
       if (e.button !== 0) return
+      if (maximized) return
       e.stopPropagation()
       resizing.current = true
       resizeStart.current = {
@@ -91,32 +97,48 @@ export function Window({
       window.addEventListener('mousemove', onMove)
       window.addEventListener('mouseup', onUp)
     },
-    [id, size.width, size.height, resizeWindow]
+    [id, size.width, size.height, maximized, resizeWindow]
   )
 
   if (minimized) return null
 
-  return (
-    <div
-      className="nexus-window absolute flex flex-col"
-      style={{
+  const computedStyle = maximized
+    ? {
+        left: 0,
+        top: 0,
+        width: `calc(100vw - ${TASKBAR_WIDTH}px)`,
+        height: '100vh',
+        zIndex,
+      }
+    : {
         left: position.x,
         top: position.y,
         width: size.width,
         height: size.height,
         zIndex,
-      }}
+      }
+
+  return (
+    <div
+      className={`nexus-window absolute flex flex-col ${maximized ? 'nexus-window-maximized' : ''}`}
+      style={computedStyle}
       onMouseDown={() => focusWindow(id)}
     >
       {/* Title bar */}
       <div
-        className="nexus-titlebar flex items-center justify-between px-3 py-2 cursor-move select-none"
+        className={`nexus-titlebar flex items-center justify-between px-3 py-2 select-none ${maximized ? 'cursor-default' : 'cursor-move'}`}
         onMouseDown={onTitleMouseDown}
+        onDoubleClick={() => maximizeWindow(id)}
       >
         <div className="flex items-center gap-2">
           <span className="text-primary text-xs font-bold tracking-widest uppercase">
             {title}
           </span>
+          {maximized && (
+            <span className="text-muted text-xs" style={{ letterSpacing: '0.05em' }}>
+              [MAX]
+            </span>
+          )}
         </div>
         <div className="flex items-center gap-1">
           <button
@@ -128,6 +150,16 @@ export function Window({
             title="Minimize"
           >
             −
+          </button>
+          <button
+            className="win-btn win-btn-max"
+            onClick={(e) => {
+              e.stopPropagation()
+              maximizeWindow(id)
+            }}
+            title={maximized ? 'Restore' : 'Maximize'}
+          >
+            {maximized ? '❐' : '□'}
           </button>
           <button
             className="win-btn win-btn-close"
@@ -145,19 +177,21 @@ export function Window({
       {/* Content */}
       <div className="flex-1 overflow-hidden relative">{children}</div>
 
-      {/* Resize handle */}
-      <div
-        className="absolute bottom-0 right-0 w-4 h-4 cursor-se-resize"
-        onMouseDown={onResizeMouseDown}
-      >
-        <svg
-          className="w-full h-full text-primary opacity-40"
-          viewBox="0 0 16 16"
-          fill="currentColor"
+      {/* Resize handle — hidden when maximized */}
+      {!maximized && (
+        <div
+          className="absolute bottom-0 right-0 w-4 h-4 cursor-se-resize"
+          onMouseDown={onResizeMouseDown}
         >
-          <path d="M11 5h2v2h-2V5zm0 4h2v2h-2V9zm-4 4h2v2H7v-2zm4 0h2v2h-2v-2z" />
-        </svg>
-      </div>
+          <svg
+            className="w-full h-full text-primary opacity-40"
+            viewBox="0 0 16 16"
+            fill="currentColor"
+          >
+            <path d="M11 5h2v2h-2V5zm0 4h2v2h-2V9zm-4 4h2v2H7v-2zm4 0h2v2h-2v-2z" />
+          </svg>
+        </div>
+      )}
     </div>
   )
 }

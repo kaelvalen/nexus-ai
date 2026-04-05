@@ -2,18 +2,22 @@ import { useEffect, useState } from 'react'
 import { useWindowStore } from '../../store/windowStore'
 import { useSessionStore } from '../../store/sessionStore'
 import { listTools, spawnTool, isTauri, type ToolDef } from '../../lib/tauri'
-import { onToolOutput, onToolExit } from '../../lib/tauri'
 
 function generateId() {
   return `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`
 }
 
+function SectionLabel({ children }: { children: React.ReactNode }) {
+  return (
+    <div className="taskbar-section-label">{children}</div>
+  )
+}
+
 export function Taskbar() {
   const [tools, setTools] = useState<ToolDef[]>([])
   const [toolsError, setToolsError] = useState<string | null>(null)
-  const { windows, openWindow, restoreWindow } = useWindowStore()
-  const { createSession, addMessage, appendToLastToolMessage, setActive, sessions } =
-    useSessionStore()
+  const { windows, openWindow, focusWindow, restoreWindow } = useWindowStore()
+  const { createSession, addMessage, sessions } = useSessionStore()
 
   useEffect(() => {
     const load = () =>
@@ -27,30 +31,10 @@ export function Taskbar() {
     if (isTauri()) {
       load()
     } else {
-      // Tauri IPC bridge not ready yet — retry after injection
       const t = setTimeout(load, 300)
       return () => clearTimeout(t)
     }
   }, [])
-
-  // Global event listeners for tool output/exit
-  useEffect(() => {
-    let unlistenOutput: (() => void) | null = null
-    let unlistenExit: (() => void) | null = null
-
-    onToolOutput((event) => {
-      appendToLastToolMessage(event.session_id, event.data)
-    }).then((fn) => { unlistenOutput = fn })
-
-    onToolExit((event) => {
-      setActive(event.session_id, false)
-    }).then((fn) => { unlistenExit = fn })
-
-    return () => {
-      unlistenOutput?.()
-      unlistenExit?.()
-    }
-  }, [appendToLastToolMessage, setActive])
 
   const getBinaryOverride = (toolId: string): string | undefined => {
     try {
@@ -68,7 +52,6 @@ export function Taskbar() {
     const windowId = `win-${sessionId}`
     const binaryOverride = getBinaryOverride(tool.id)
 
-    // Launcher tools: fire-and-forget, no terminal window
     if (tool.mode === 'Launcher') {
       try {
         await spawnTool(sessionId, tool.id, binaryOverride)
@@ -94,22 +77,32 @@ export function Taskbar() {
 
     openWindow({
       id: windowId,
-      title: `${tool.name} — ${sessionId.slice(0, 6)}`,
+      title: `${tool.name}`,
       component: 'Terminal',
       props: { sessionId, toolId: tool.id },
       position: {
-        x: 80 + Math.random() * 80,
-        y: 40 + Math.random() * 60,
+        x: 80 + Math.random() * 120,
+        y: 40 + Math.random() * 80,
       },
-      size: { width: 700, height: 480 },
+      size: { width: 740, height: 500 },
     })
+  }
+
+  const focusSessionWindow = (sessionId: string) => {
+    const win = windows.find(
+      (w) => w.component === 'Terminal' && w.props.sessionId === sessionId
+    )
+    if (!win) return
+    if (win.minimized) restoreWindow(win.id)
+    else focusWindow(win.id)
   }
 
   const openWorkflowEditor = () => {
     const id = 'workflow-editor'
     const existing = windows.find((w) => w.id === id)
     if (existing) {
-      restoreWindow(id)
+      if (existing.minimized) restoreWindow(id)
+      else focusWindow(id)
       return
     }
     openWindow({
@@ -118,7 +111,7 @@ export function Taskbar() {
       component: 'WorkflowEditor',
       props: {},
       position: { x: 120, y: 60 },
-      size: { width: 900, height: 600 },
+      size: { width: 960, height: 640 },
     })
   }
 
@@ -126,7 +119,8 @@ export function Taskbar() {
     const id = 'settings'
     const existing = windows.find((w) => w.id === id)
     if (existing) {
-      restoreWindow(id)
+      if (existing.minimized) restoreWindow(id)
+      else focusWindow(id)
       return
     }
     openWindow({
@@ -135,92 +129,141 @@ export function Taskbar() {
       component: 'Settings',
       props: {},
       position: { x: 160, y: 80 },
-      size: { width: 560, height: 420 },
+      size: { width: 580, height: 460 },
     })
   }
 
-  // Minimized windows
   const minimizedWindows = windows.filter((w) => w.minimized)
+  const allSessions = Object.values(sessions)
 
-  // Active sessions count per tool
-  const activeSessions = Object.values(sessions).filter((s) => s.active)
+  const repl = tools.filter((t) => t.mode === 'Repl' || t.mode === 'OneShot')
+  const launchers = tools.filter((t) => t.mode === 'Launcher')
 
   return (
-    <aside className="taskbar flex flex-col items-center py-4 gap-2">
+    <aside className="taskbar flex flex-col py-3 gap-0">
       {/* Logo */}
-      <div className="taskbar-logo mb-4">
-        <span className="text-primary font-black text-lg tracking-tighter">NX</span>
+      <div className="taskbar-logo px-3 mb-3">
+        <span className="text-primary font-black tracking-tighter" style={{ fontSize: 15 }}>NEXUS</span>
       </div>
 
-      {/* Tool buttons */}
-      <div className="flex flex-col gap-1 w-full px-2">
-        {toolsError && (
-          <div
-            className="text-red-400 text-xs px-1 break-all cursor-pointer"
-            title={toolsError}
-            onClick={() => listTools().then(setTools).catch(() => {})}
-          >
-            ERR: {toolsError.slice(0, 40)}
+      {/* Error */}
+      {toolsError && (
+        <div
+          className="mx-2 mb-2 px-2 py-1 rounded text-xs cursor-pointer"
+          style={{ background: 'rgba(255,68,68,0.1)', color: '#ff6b6b', border: '1px solid rgba(255,68,68,0.3)' }}
+          title={toolsError}
+          onClick={() => listTools().then(setTools).catch(() => {})}
+        >
+          ⚠ Load error — click to retry
+        </div>
+      )}
+
+      {/* AI Tools */}
+      {repl.length > 0 && (
+        <>
+          <SectionLabel>AI Tools</SectionLabel>
+          <div className="flex flex-col gap-0.5 px-2 mb-1">
+            {repl.map((tool) => {
+              const toolSessions = allSessions.filter((s) => s.toolId === tool.id)
+              const activeSessions = toolSessions.filter((s) => s.active)
+              return (
+                <div key={tool.id}>
+                  <button
+                    className="taskbar-btn w-full"
+                    onClick={() => launchTool(tool)}
+                    title={`Launch ${tool.name}`}
+                  >
+                    <span className="tool-icon">{tool.icon}</span>
+                    <span className="tool-label flex-1 text-left">{tool.name}</span>
+                    {activeSessions.length > 0 && (
+                      <span className="session-badge">{activeSessions.length}</span>
+                    )}
+                  </button>
+                  {toolSessions.length > 0 && (
+                    <div className="flex flex-col gap-0 pl-4 pr-2 mb-1">
+                      {toolSessions.map((s) => (
+                        <button
+                          key={s.id}
+                          className="session-item"
+                          onClick={() => focusSessionWindow(s.id)}
+                          title={`Switch to session ${s.id.slice(0, 8)}`}
+                        >
+                          <span className={`session-item-dot ${s.active ? 'dot-active' : 'dot-dead'}`} />
+                          <span className="session-item-id">#{s.id.slice(0, 6)}</span>
+                          <span className="session-item-status">{s.active ? 'live' : 'ended'}</span>
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )
+            })}
           </div>
-        )}
-        {tools.map((tool) => {
-          const toolSessions = activeSessions.filter((s) => s.toolId === tool.id)
-          return (
-            <button
-              key={tool.id}
-              className="taskbar-btn group relative"
-              onClick={() => launchTool(tool)}
-              title={tool.name}
-            >
-              <span className="tool-icon">{tool.icon}</span>
-              <span className="tool-label">{tool.name}</span>
-              {toolSessions.length > 0 && (
-                <span className="session-dot" />
-              )}
-            </button>
-          )
-        })}
-      </div>
+        </>
+      )}
+
+      {/* Launchers */}
+      {launchers.length > 0 && (
+        <>
+          <SectionLabel>Editors</SectionLabel>
+          <div className="flex flex-col gap-0.5 px-2 mb-1">
+            {launchers.map((tool) => (
+              <button
+                key={tool.id}
+                className="taskbar-btn w-full"
+                onClick={() => launchTool(tool)}
+                title={`Open ${tool.name}`}
+              >
+                <span className="tool-icon">{tool.icon}</span>
+                <span className="tool-label flex-1 text-left">{tool.name}</span>
+                <span className="tool-launch-arrow">↗</span>
+              </button>
+            ))}
+          </div>
+        </>
+      )}
 
       <div className="flex-1" />
 
       {/* Minimized windows */}
       {minimizedWindows.length > 0 && (
-        <div className="flex flex-col gap-1 w-full px-2 mb-2">
-          <div className="text-muted text-xs text-center mb-1">MIN</div>
-          {minimizedWindows.map((win) => (
-            <button
-              key={win.id}
-              className="taskbar-btn group"
-              onClick={() => restoreWindow(win.id)}
-              title={win.title}
-            >
-              <span className="tool-icon">▣</span>
-              <span className="tool-label truncate">{win.title}</span>
-            </button>
-          ))}
-        </div>
+        <>
+          <SectionLabel>Minimized</SectionLabel>
+          <div className="flex flex-col gap-0.5 px-2 mb-1">
+            {minimizedWindows.map((win) => (
+              <button
+                key={win.id}
+                className="taskbar-btn w-full"
+                onClick={() => restoreWindow(win.id)}
+                title={`Restore: ${win.title}`}
+              >
+                <span className="tool-icon" style={{ fontSize: 11 }}>▣</span>
+                <span className="tool-label flex-1 text-left truncate">{win.title}</span>
+              </button>
+            ))}
+          </div>
+        </>
       )}
 
-      {/* Workflow editor */}
-      <button
-        className="taskbar-btn group w-full px-2"
-        onClick={openWorkflowEditor}
-        title="Workflow Editor"
-      >
-        <span className="tool-icon">⇝</span>
-        <span className="tool-label">Workflow</span>
-      </button>
-
-      {/* Settings */}
-      <button
-        className="taskbar-btn group w-full px-2 mt-1"
-        onClick={openSettings}
-        title="Settings"
-      >
-        <span className="tool-icon">⚙</span>
-        <span className="tool-label">Settings</span>
-      </button>
+      {/* Bottom actions */}
+      <div className="flex flex-col gap-0.5 px-2 pt-2" style={{ borderTop: '1px solid var(--border)' }}>
+        <button
+          className="taskbar-btn w-full"
+          onClick={openWorkflowEditor}
+          title="Open Workflow Editor"
+        >
+          <span className="tool-icon">⇝</span>
+          <span className="tool-label flex-1 text-left">Workflow</span>
+        </button>
+        <button
+          className="taskbar-btn w-full"
+          onClick={openSettings}
+          title="Open Settings"
+        >
+          <span className="tool-icon">⚙</span>
+          <span className="tool-label flex-1 text-left">Settings</span>
+        </button>
+      </div>
     </aside>
   )
 }

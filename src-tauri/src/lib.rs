@@ -17,6 +17,7 @@ pub fn run() {
             tools::list_tools,
             process_manager::spawn_tool,
             process_manager::send_input,
+            process_manager::resize_pty,
             process_manager::kill_session,
             process_manager::list_sessions,
             workflow::execute_workflow,

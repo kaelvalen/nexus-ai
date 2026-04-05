@@ -31,6 +31,7 @@ export function WindowManager() {
             size={win.size}
             zIndex={win.zIndex}
             minimized={win.minimized}
+            maximized={win.maximized}
           >
             <WindowContent component={win.component} props={win.props} />
           </Window>

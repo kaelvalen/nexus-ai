@@ -1,209 +1,174 @@
-import { useEffect, useRef, useState, useCallback } from 'react'
-import { useSessionStore, type Message } from '../../store/sessionStore'
-import { sendInput, killSession } from '../../lib/tauri'
+import { useEffect, useRef } from 'react'
+import { Terminal } from '@xterm/xterm'
+import { FitAddon } from '@xterm/addon-fit'
+import { WebLinksAddon } from '@xterm/addon-web-links'
+import '@xterm/xterm/css/xterm.css'
+import { useSessionStore } from '../../store/sessionStore'
+import { sendInput, killSession, resizePty, onToolOutput, onToolExit } from '../../lib/tauri'
 
 interface Props {
   sessionId: string
   toolId: string
 }
 
-// Strip ANSI escape codes (colors, cursor moves, etc.)
-// eslint-disable-next-line no-control-regex
-const ANSI_RE = /\x1b(?:\[[0-9;?]*[A-Za-z]|[@-_])/g
-function stripAnsi(text: string): string {
-  return text.replace(ANSI_RE, '')
-}
-
-// Simple syntax highlight: wrap code fences and inline code
-function highlightOutput(raw: string): React.ReactNode[] {
-  const text = stripAnsi(raw)
-  const lines = text.split('\n')
-  const result: React.ReactNode[] = []
-  let inCode = false
-  let codeLines: string[] = []
-
-  for (let i = 0; i < lines.length; i++) {
-    const line = lines[i]
-    if (line.startsWith('```')) {
-      if (inCode) {
-        result.push(
-          <div key={`code-${i}`} className="code-block">
-            {codeLines.map((cl, j) => (
-              <div key={j} className="code-line">{cl || '\u00A0'}</div>
-            ))}
-          </div>
-        )
-        codeLines = []
-        inCode = false
-      } else {
-        inCode = true
-      }
-    } else if (inCode) {
-      codeLines.push(line)
-    } else {
-      // Highlight inline code `...`
-      const parts = line.split(/(`[^`]+`)/)
-      result.push(
-        <div key={`line-${i}`} className="output-line">
-          {parts.map((part, j) => {
-            if (part.startsWith('`') && part.endsWith('`')) {
-              return <code key={j} className="inline-code">{part.slice(1, -1)}</code>
-            }
-            return <span key={j}>{part}</span>
-          })}
-        </div>
-      )
-    }
-  }
-
-  if (inCode && codeLines.length > 0) {
-    result.push(
-      <div key="code-final" className="code-block">
-        {codeLines.map((cl, j) => (
-          <div key={j} className="code-line">{cl || '\u00A0'}</div>
-        ))}
-      </div>
-    )
-  }
-
-  return result
-}
-
-function MessageBubble({ msg }: { msg: Message }) {
-  const isUser = msg.role === 'user'
-  return (
-    <div className={`msg-row ${isUser ? 'msg-user' : 'msg-tool'}`}>
-      <span className="msg-prefix">{isUser ? '❯' : '◈'}</span>
-      <div className="msg-content">
-        {isUser ? (
-          <span className="user-text">{msg.content}</span>
-        ) : (
-          <div className="tool-text">{highlightOutput(msg.content)}</div>
-        )}
-      </div>
-      <span className="msg-time">
-        {new Date(msg.timestamp).toLocaleTimeString('en', { hour12: false })}
-      </span>
-    </div>
-  )
-}
-
 export function TerminalWindow({ sessionId, toolId }: Props) {
-  const { sessions, addMessage } = useSessionStore()
+  const { sessions, setActive } = useSessionStore()
   const session = sessions[sessionId]
-  const [input, setInput] = useState('')
-  const [history, setHistory] = useState<string[]>([])
-  const [histIdx, setHistIdx] = useState(-1)
-  const scrollRef = useRef<HTMLDivElement>(null)
-  const inputRef = useRef<HTMLInputElement>(null)
+  const containerRef = useRef<HTMLDivElement>(null)
+  const termRef = useRef<Terminal | null>(null)
+  const fitRef = useRef<FitAddon | null>(null)
 
-  // Auto-scroll
   useEffect(() => {
-    const el = scrollRef.current
-    if (el) el.scrollTop = el.scrollHeight
-  }, [session?.messages])
+    if (!containerRef.current) return
 
-  const submit = useCallback(async () => {
-    const trimmed = input.trim()
-    if (!trimmed) return
+    const term = new Terminal({
+      theme: {
+        background: '#080c10',
+        foreground: '#c0cdd8',
+        cursor: '#00ff88',
+        cursorAccent: '#080c10',
+        black: '#080c10',
+        red: '#ff4444',
+        green: '#00ff88',
+        yellow: '#f0a500',
+        blue: '#4d9fff',
+        magenta: '#c678dd',
+        cyan: '#00d4ff',
+        white: '#c0cdd8',
+        brightBlack: '#4a6070',
+        brightRed: '#ff6b6b',
+        brightGreen: '#00ff88',
+        brightYellow: '#ffcc00',
+        brightBlue: '#61afef',
+        brightMagenta: '#c678dd',
+        brightCyan: '#56b6c2',
+        brightWhite: '#ffffff',
+      },
+      fontFamily: '"JetBrains Mono", "Cascadia Code", "Fira Code", monospace',
+      fontSize: 13,
+      lineHeight: 1.4,
+      cursorBlink: true,
+      cursorStyle: 'block',
+      scrollback: 5000,
+      allowProposedApi: true,
+    })
 
-    addMessage(sessionId, 'user', trimmed)
-    setHistory((h) => [trimmed, ...h.slice(0, 99)])
-    setHistIdx(-1)
-    setInput('')
+    const fitAddon = new FitAddon()
+    const webLinksAddon = new WebLinksAddon()
+    term.loadAddon(fitAddon)
+    term.loadAddon(webLinksAddon)
+    term.open(containerRef.current)
+    fitAddon.fit()
 
-    try {
-      await sendInput(sessionId, trimmed)
-    } catch (e) {
-      addMessage(sessionId, 'tool', `[ERROR] ${e}`)
+    termRef.current = term
+    fitRef.current = fitAddon
+
+    // Send keystrokes directly to PTY as raw bytes
+    term.onData((data) => {
+      sendInput(sessionId, data).catch(console.error)
+    })
+
+    // Sync terminal size to PTY on resize
+    term.onResize(({ rows, cols }) => {
+      resizePty(sessionId, rows, cols).catch(console.error)
+    })
+
+    // ResizeObserver to fit terminal when container changes size
+    const ro = new ResizeObserver(() => {
+      fitAddon.fit()
+    })
+    ro.observe(containerRef.current)
+
+    // Listen for output from this session
+    let unlistenOutput: (() => void) | null = null
+    let unlistenExit: (() => void) | null = null
+
+    onToolOutput((event) => {
+      if (event.session_id === sessionId) {
+        term.write(event.data)
+      }
+    }).then((fn) => { unlistenOutput = fn })
+
+    onToolExit((event) => {
+      if (event.session_id === sessionId) {
+        setActive(sessionId, false)
+        term.write('\r\n\x1b[31m— session ended —\x1b[0m\r\n')
+      }
+    }).then((fn) => { unlistenExit = fn })
+
+    return () => {
+      ro.disconnect()
+      unlistenOutput?.()
+      unlistenExit?.()
+      term.dispose()
+      termRef.current = null
+      fitRef.current = null
     }
-  }, [input, sessionId, addMessage])
+  }, [sessionId])
 
-  const onKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
-    if (e.key === 'Enter') {
-      submit()
-    } else if (e.key === 'ArrowUp') {
-      e.preventDefault()
-      const newIdx = Math.min(histIdx + 1, history.length - 1)
-      setHistIdx(newIdx)
-      setInput(history[newIdx] ?? '')
-    } else if (e.key === 'ArrowDown') {
-      e.preventDefault()
-      const newIdx = Math.max(histIdx - 1, -1)
-      setHistIdx(newIdx)
-      setInput(newIdx === -1 ? '' : history[newIdx] ?? '')
-    } else if (e.key === 'c' && e.ctrlKey) {
-      killSession(sessionId).catch(console.error)
-      addMessage(sessionId, 'tool', '^C — session terminated')
+  const handleKill = () => {
+    killSession(sessionId).catch(console.error)
+    termRef.current?.write('\r\n\x1b[31m^C — killed\x1b[0m\r\n')
+  }
+
+  const handleCopy = () => {
+    const selection = termRef.current?.getSelection()
+    if (selection) {
+      navigator.clipboard.writeText(selection)
+    } else {
+      // copy all visible buffer
+      const buf: string[] = []
+      const t = termRef.current
+      if (!t) return
+      for (let i = 0; i < t.buffer.active.length; i++) {
+        buf.push(t.buffer.active.getLine(i)?.translateToString(true) ?? '')
+      }
+      navigator.clipboard.writeText(buf.join('\n').trimEnd())
     }
   }
 
   if (!session) {
     return (
-      <div className="flex items-center justify-center h-full text-muted">
-        Session not found
+      <div className="flex items-center justify-center h-full text-muted text-xs font-mono">
+        Session not found: {sessionId}
       </div>
     )
   }
 
   return (
-    <div
-      className="terminal-window flex flex-col h-full"
-      onClick={() => inputRef.current?.focus()}
-    >
-      {/* Session header */}
-      <div className="terminal-header flex items-center gap-3 px-3 py-1.5">
-        <span className="text-secondary text-xs font-mono">{toolId}</span>
+    <div className="terminal-window flex flex-col h-full">
+      {/* Header */}
+      <div className="terminal-header flex items-center gap-2 px-3 py-1.5">
+        <span className="text-secondary text-xs font-mono font-semibold">{session.toolName}</span>
         <span className="text-muted text-xs font-mono">#{sessionId.slice(0, 8)}</span>
         <span className={`session-status ${session.active ? 'status-active' : 'status-dead'}`}>
-          {session.active ? '● LIVE' : '○ DEAD'}
+          {session.active ? '● live' : '○ ended'}
         </span>
-      </div>
-
-      {/* Messages */}
-      <div ref={scrollRef} className="terminal-messages flex-1 overflow-y-auto p-3 space-y-1">
-        {session.messages.length === 0 ? (
-          <div className="text-muted text-xs font-mono pt-2">
-            {session.active
-              ? `Waiting for ${session.toolName} to respond...`
-              : `Session ended.`}
-          </div>
-        ) : (
-          session.messages.map((msg) => (
-            <MessageBubble key={msg.id} msg={msg} />
-          ))
-        )}
-        {/* Cursor blink when active and waiting */}
-        {session.active && (
-          <div className="text-primary font-mono text-sm">
-            <span className="blink">▌</span>
-          </div>
-        )}
-      </div>
-
-      {/* Input bar */}
-      <div className="terminal-input-bar flex items-center gap-2 px-3 py-2">
-        <span className="text-primary font-mono text-sm">❯</span>
-        <input
-          ref={inputRef}
-          className="terminal-input flex-1"
-          value={input}
-          onChange={(e) => setInput(e.target.value)}
-          onKeyDown={onKeyDown}
-          placeholder={session.active ? 'Send input...' : 'Session ended'}
-          disabled={!session.active}
-          autoFocus
-          spellCheck={false}
-          autoComplete="off"
-        />
+        <div className="flex-1" />
+        <span className="text-muted text-xs font-mono">{toolId}</span>
         <button
-          className="send-btn"
-          onClick={submit}
-          disabled={!session.active || !input.trim()}
+          className="terminal-action-btn"
+          onClick={handleCopy}
+          title="Copy selection or all"
         >
-          ⏎
+          ⎘ copy
+        </button>
+        <button
+          className="terminal-action-btn terminal-action-btn-danger"
+          onClick={handleKill}
+          disabled={!session.active}
+          title="Kill session"
+        >
+          ✕ kill
         </button>
       </div>
+
+      {/* xterm.js container */}
+      <div
+        ref={containerRef}
+        className="flex-1 min-h-0"
+        style={{ padding: '4px 2px' }}
+      />
     </div>
   )
 }
