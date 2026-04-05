@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useWindowStore } from '../../store/windowStore'
 import { useSessionStore } from '../../store/sessionStore'
-import { listTools, spawnTool, type ToolDef } from '../../lib/tauri'
+import { listTools, spawnTool, isTauri, type ToolDef } from '../../lib/tauri'
 import { onToolOutput, onToolExit } from '../../lib/tauri'
 
 function generateId() {
@@ -16,12 +16,21 @@ export function Taskbar() {
     useSessionStore()
 
   useEffect(() => {
-    listTools()
-      .then(setTools)
-      .catch((e) => {
-        console.error('listTools failed:', e)
-        setToolsError(String(e))
-      })
+    const load = () =>
+      listTools()
+        .then(setTools)
+        .catch((e) => {
+          console.error('listTools failed:', e)
+          setToolsError(String(e))
+        })
+
+    if (isTauri()) {
+      load()
+    } else {
+      // Tauri IPC bridge not ready yet — retry after injection
+      const t = setTimeout(load, 300)
+      return () => clearTimeout(t)
+    }
   }, [])
 
   // Global event listeners for tool output/exit

@@ -7,8 +7,16 @@ interface Props {
   toolId: string
 }
 
+// Strip ANSI escape codes (colors, cursor moves, etc.)
+// eslint-disable-next-line no-control-regex
+const ANSI_RE = /\x1b(?:\[[0-9;?]*[A-Za-z]|[@-_])/g
+function stripAnsi(text: string): string {
+  return text.replace(ANSI_RE, '')
+}
+
 // Simple syntax highlight: wrap code fences and inline code
-function highlightOutput(text: string): React.ReactNode[] {
+function highlightOutput(raw: string): React.ReactNode[] {
+  const text = stripAnsi(raw)
   const lines = text.split('\n')
   const result: React.ReactNode[] = []
   let inCode = false

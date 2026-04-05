@@ -1,6 +1,8 @@
 import { invoke } from '@tauri-apps/api/core'
 import { listen, type UnlistenFn } from '@tauri-apps/api/event'
 
+export const isTauri = () => '__TAURI_INTERNALS__' in window
+
 export interface ToolDef {
   id: string
   name: string

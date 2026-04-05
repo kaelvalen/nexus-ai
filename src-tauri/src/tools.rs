@@ -66,7 +66,7 @@ pub fn get_tool_definitions() -> Vec<ToolDef> {
             args: vec![
                 "copilot".into(),
                 "suggest".into(),
-                "-t".into(),
+                "--target".into(),
                 "shell".into(),
             ],
             mode: ToolMode::OneShot,
