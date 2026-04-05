@@ -137,6 +137,7 @@ export const spawnTool = (
   sessionId: string,
   toolId: string,
   binaryOverride?: string,
+  cwd?: string,
   rows?: number,
   cols?: number,
 ) =>
@@ -144,6 +145,7 @@ export const spawnTool = (
     sessionId,
     toolId,
     binaryOverride: binaryOverride ?? null,
+    cwd: cwd ?? null,
     rows: rows ?? null,
     cols: cols ?? null,
   })

@@ -57,6 +57,7 @@ pub async fn spawn_tool(
     session_id: String,
     tool_id: String,
     binary_override: Option<String>,
+    cwd: Option<String>,
     rows: Option<u16>,
     cols: Option<u16>,
     state: tauri::State<'_, Arc<ProcessManager>>,
@@ -68,6 +69,9 @@ pub async fn spawn_tool(
         let mut cmd = std::process::Command::new(&binary);
         for arg in &tool.args {
             cmd.arg(arg);
+        }
+        if let Some(ref dir) = cwd {
+            cmd.current_dir(dir);
         }
         cmd.spawn()
             .map_err(|e| format!("Failed to launch {}: {}", binary, e))?;
@@ -90,6 +94,9 @@ pub async fn spawn_tool(
     let mut cmd = CommandBuilder::new(&binary);
     for arg in &tool.args {
         cmd.arg(arg);
+    }
+    if let Some(ref dir) = cwd {
+        cmd.cwd(dir);
     }
 
     let mut child = pair
@@ -186,12 +193,18 @@ pub async fn resize_pty(
 
 #[tauri::command]
 pub async fn kill_session(
+    app: AppHandle,
     session_id: String,
     state: tauri::State<'_, Arc<ProcessManager>>,
 ) -> Result<(), String> {
-    let mut sessions = state.sessions.lock().unwrap();
-    if let Some(session) = sessions.remove(&session_id) {
-        // Closing the master side causes the child process to receive SIGHUP
+    let removed = {
+        let mut sessions = state.sessions.lock().unwrap();
+        sessions.remove(&session_id)
+    };
+    if let Some(session) = removed {
+        // Emit exit event BEFORE dropping so the frontend sees the session as dead
+        app.emit("tool-exit", ExitEvent { session_id: session_id.clone(), code: Some(1) }).ok();
+        // Dropping master PTY sends SIGHUP to the child
         drop(session);
     }
     Ok(())

@@ -1,5 +1,6 @@
 import { useWindowStore } from '../../store/windowStore'
 import { useSessionStore } from '../../store/sessionStore'
+import { useCwdStore } from '../../store/cwdStore'
 import { listTools, spawnTool, isTauri, type ToolDef } from '../../lib/tauri'
 import { toast } from '../../store/toastStore'
 import { useEffect, useState } from 'react'
@@ -32,6 +33,7 @@ export function KernelPanel({ onSectionChange }: Props) {
     else setTimeout(load, 300)
   }, [])
 
+  const { cwd } = useCwdStore()
   const activeWindows = windows.filter((w) => !w.minimized)
   const allSessions = Object.values(sessions)
   const liveSessions = allSessions.filter((s) => s.active)
@@ -40,15 +42,16 @@ export function KernelPanel({ onSectionChange }: Props) {
     const sessionId = generateId()
     const windowId = `win-${sessionId}`
     const binaryOverride = getBinaryOverride(tool.id)
+    const resolvedCwd = cwd === '~' ? undefined : cwd
 
     if (tool.mode === 'Launcher') {
-      try { await spawnTool(sessionId, tool.id, binaryOverride); toast.info(`Launched ${tool.name}`) }
+      try { await spawnTool(sessionId, tool.id, binaryOverride, resolvedCwd); toast.info(`Launched ${tool.name}`) }
       catch (e) { toast.error(`Failed to launch ${tool.name}`, String(e)) }
       return
     }
 
     createSession(sessionId, tool.id, tool.name)
-    try { await spawnTool(sessionId, tool.id, binaryOverride, 24, 220) }
+    try { await spawnTool(sessionId, tool.id, binaryOverride, resolvedCwd, 24, 220) }
     catch (e) { addMessage(sessionId, 'tool', `[ERROR] ${e}`); toast.error(`Failed to spawn ${tool.name}`, String(e)) }
 
     openWindow({

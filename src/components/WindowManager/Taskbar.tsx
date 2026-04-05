@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useWindowStore } from '../../store/windowStore'
 import { useSessionStore } from '../../store/sessionStore'
+import { useCwdStore } from '../../store/cwdStore'
 import { listTools, checkAllTools, spawnTool, killSession, isTauri, type ToolDef, type ToolAvailability } from '../../lib/tauri'
 import { toast } from '../../store/toastStore'
 
@@ -58,14 +59,17 @@ export function Taskbar({ onOpenPalette }: TaskbarProps) {
     }
   }
 
+  const { cwd } = useCwdStore()
+
   const launchTool = async (tool: ToolDef) => {
     const sessionId = generateId()
     const windowId = `win-${sessionId}`
     const binaryOverride = getBinaryOverride(tool.id)
+    const resolvedCwd = cwd === '~' ? undefined : cwd
 
     if (tool.mode === 'Launcher') {
       try {
-        await spawnTool(sessionId, tool.id, binaryOverride)
+        await spawnTool(sessionId, tool.id, binaryOverride, resolvedCwd)
         toast.info(`Launched ${tool.name}`)
       } catch (e) {
         toast.error(`Failed to launch ${tool.name}`, String(e))
@@ -76,7 +80,7 @@ export function Taskbar({ onOpenPalette }: TaskbarProps) {
     createSession(sessionId, tool.id, tool.name)
 
     try {
-      await spawnTool(sessionId, tool.id, binaryOverride, 24, 220)
+      await spawnTool(sessionId, tool.id, binaryOverride, resolvedCwd, 24, 220)
     } catch (e) {
       addMessage(sessionId, 'tool', `[ERROR] Failed to spawn ${tool.name}: ${e}`)
       toast.error(`Failed to spawn ${tool.name}`, String(e))

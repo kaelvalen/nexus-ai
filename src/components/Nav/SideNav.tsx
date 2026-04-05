@@ -1,5 +1,6 @@
 import { useWindowStore } from '../../store/windowStore'
 import { useSessionStore } from '../../store/sessionStore'
+import { useCwdStore } from '../../store/cwdStore'
 import { listTools, checkAllTools, spawnTool, isTauri, type ToolDef, type ToolAvailability } from '../../lib/tauri'
 import { toast } from '../../store/toastStore'
 import { useEffect, useState } from 'react'
@@ -30,6 +31,7 @@ export function SideNav({ activeSection, onSectionChange, onOpenPalette }: Props
   const [availability, setAvailability] = useState<Record<string, ToolAvailability>>({})
   const { windows, openWindow, focusWindow, restoreWindow } = useWindowStore()
   const { createSession, addMessage, sessions } = useSessionStore()
+  const { cwd } = useCwdStore()
 
   useEffect(() => {
     const load = () =>
@@ -53,9 +55,11 @@ export function SideNav({ activeSection, onSectionChange, onOpenPalette }: Props
     const windowId = `win-${sessionId}`
     const binaryOverride = getBinaryOverride(tool.id)
 
+    const resolvedCwd = cwd === '~' ? undefined : cwd
+
     if (tool.mode === 'Launcher') {
       try {
-        await spawnTool(sessionId, tool.id, binaryOverride)
+        await spawnTool(sessionId, tool.id, binaryOverride, resolvedCwd)
         toast.info(`Launched ${tool.name}`)
       } catch (e) {
         toast.error(`Failed to launch ${tool.name}`, String(e))
@@ -65,7 +69,7 @@ export function SideNav({ activeSection, onSectionChange, onOpenPalette }: Props
 
     createSession(sessionId, tool.id, tool.name)
     try {
-      await spawnTool(sessionId, tool.id, binaryOverride, 24, 220)
+      await spawnTool(sessionId, tool.id, binaryOverride, resolvedCwd, 24, 220)
     } catch (e) {
       addMessage(sessionId, 'tool', `[ERROR] Failed to spawn ${tool.name}: ${e}`)
       toast.error(`Failed to spawn ${tool.name}`, String(e))
