@@ -21,6 +21,9 @@ export function TerminalWindow({ sessionId, toolId }: Props) {
   useEffect(() => {
     if (!containerRef.current) return
 
+    const savedFontSize = parseInt(localStorage.getItem('nexus:font-size') ?? '13')
+    const savedFontFamily = localStorage.getItem('nexus:font-family') ?? '"JetBrains Mono", "Cascadia Code", "Fira Code", monospace'
+
     const term = new Terminal({
       theme: {
         background: '#080c10',
@@ -44,8 +47,8 @@ export function TerminalWindow({ sessionId, toolId }: Props) {
         brightCyan: '#56b6c2',
         brightWhite: '#ffffff',
       },
-      fontFamily: '"JetBrains Mono", "Cascadia Code", "Fira Code", monospace',
-      fontSize: 13,
+      fontFamily: savedFontFamily,
+      fontSize: savedFontSize,
       lineHeight: 1.4,
       cursorBlink: true,
       cursorStyle: 'block',

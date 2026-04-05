@@ -16,6 +16,8 @@ export interface NexusWindow {
   zIndex: number
 }
 
+export type SnapPosition = 'left' | 'right' | 'top-left' | 'top-right' | 'bottom-left' | 'bottom-right'
+
 interface WindowStore {
   windows: NexusWindow[]
   topZ: number
@@ -27,6 +29,7 @@ interface WindowStore {
   focusWindow: (id: string) => void
   moveWindow: (id: string, position: { x: number; y: number }) => void
   resizeWindow: (id: string, size: { width: number; height: number }) => void
+  snapWindow: (id: string, snap: SnapPosition) => void
 }
 
 export const useWindowStore = create<WindowStore>((set, get) => ({
@@ -111,4 +114,30 @@ export const useWindowStore = create<WindowStore>((set, get) => ({
         w.id === id ? { ...w, size } : w
       ),
     })),
+
+  snapWindow: (id, snap) => {
+    const TASKBAR = 120
+    const vw = window.innerWidth - TASKBAR
+    const vh = window.innerHeight
+    const half = { width: Math.floor(vw / 2), height: vh }
+    const quarter = { width: Math.floor(vw / 2), height: Math.floor(vh / 2) }
+
+    const positions: Record<string, { position: { x: number; y: number }; size: { width: number; height: number } }> = {
+      left:         { position: { x: 0, y: 0 },                size: half },
+      right:        { position: { x: Math.floor(vw / 2), y: 0 }, size: half },
+      'top-left':   { position: { x: 0, y: 0 },                size: quarter },
+      'top-right':  { position: { x: Math.floor(vw / 2), y: 0 }, size: quarter },
+      'bottom-left':  { position: { x: 0, y: Math.floor(vh / 2) },                  size: quarter },
+      'bottom-right': { position: { x: Math.floor(vw / 2), y: Math.floor(vh / 2) }, size: quarter },
+    }
+
+    const target = positions[snap]
+    if (!target) return
+
+    set((state) => ({
+      windows: state.windows.map((w) =>
+        w.id === id ? { ...w, maximized: false, ...target } : w
+      ),
+    }))
+  },
 }))

@@ -1,23 +1,26 @@
 import { useEffect, useState } from 'react'
 import { useWindowStore } from '../../store/windowStore'
 import { useSessionStore } from '../../store/sessionStore'
-import { listTools, spawnTool, isTauri, type ToolDef } from '../../lib/tauri'
+import { listTools, spawnTool, killSession, isTauri, type ToolDef } from '../../lib/tauri'
+import { toast } from '../../store/toastStore'
 
 function generateId() {
   return `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`
 }
 
 function SectionLabel({ children }: { children: React.ReactNode }) {
-  return (
-    <div className="taskbar-section-label">{children}</div>
-  )
+  return <div className="taskbar-section-label">{children}</div>
 }
 
-export function Taskbar() {
+interface TaskbarProps {
+  onOpenPalette: () => void
+}
+
+export function Taskbar({ onOpenPalette }: TaskbarProps) {
   const [tools, setTools] = useState<ToolDef[]>([])
   const [toolsError, setToolsError] = useState<string | null>(null)
-  const { windows, openWindow, focusWindow, restoreWindow } = useWindowStore()
-  const { createSession, addMessage, sessions } = useSessionStore()
+  const { windows, openWindow, focusWindow, restoreWindow, closeWindow } = useWindowStore()
+  const { createSession, addMessage, sessions, setActive, removeSession } = useSessionStore()
 
   useEffect(() => {
     const load = () =>
@@ -55,8 +58,9 @@ export function Taskbar() {
     if (tool.mode === 'Launcher') {
       try {
         await spawnTool(sessionId, tool.id, binaryOverride)
+        toast.info(`Launched ${tool.name}`)
       } catch (e) {
-        console.error(`Failed to launch ${tool.name}:`, e)
+        toast.error(`Failed to launch ${tool.name}`, String(e))
       }
       return
     }
@@ -67,6 +71,7 @@ export function Taskbar() {
       await spawnTool(sessionId, tool.id, binaryOverride)
     } catch (e) {
       addMessage(sessionId, 'tool', `[ERROR] Failed to spawn ${tool.name}: ${e}`)
+      toast.error(`Failed to spawn ${tool.name}`, String(e))
     }
 
     const existing = windows.find((w) => w.id === windowId)
@@ -77,7 +82,7 @@ export function Taskbar() {
 
     openWindow({
       id: windowId,
-      title: `${tool.name}`,
+      title: tool.name,
       component: 'Terminal',
       props: { sessionId, toolId: tool.id },
       position: {
@@ -95,6 +100,16 @@ export function Taskbar() {
     if (!win) return
     if (win.minimized) restoreWindow(win.id)
     else focusWindow(win.id)
+  }
+
+  const closeSession = (sessionId: string) => {
+    killSession(sessionId).catch(() => {})
+    setActive(sessionId, false)
+    const win = windows.find(
+      (w) => w.component === 'Terminal' && w.props.sessionId === sessionId
+    )
+    if (win) closeWindow(win.id)
+    removeSession(sessionId)
   }
 
   const openWorkflowEditor = () => {
@@ -142,8 +157,21 @@ export function Taskbar() {
   return (
     <aside className="taskbar flex flex-col py-3 gap-0">
       {/* Logo */}
-      <div className="taskbar-logo px-3 mb-3">
+      <div className="taskbar-logo px-3 mb-2">
         <span className="text-primary font-black tracking-tighter" style={{ fontSize: 15 }}>NEXUS</span>
+      </div>
+
+      {/* Command palette trigger */}
+      <div className="px-2 mb-2">
+        <button
+          className="taskbar-search-btn"
+          onClick={onOpenPalette}
+          title="Open Command Palette (Ctrl+K)"
+        >
+          <span style={{ fontSize: 11, opacity: 0.6 }}>⌕</span>
+          <span>Search…</span>
+          <span className="taskbar-search-kbd">^K</span>
+        </button>
       </div>
 
       {/* Error */}
@@ -154,7 +182,7 @@ export function Taskbar() {
           title={toolsError}
           onClick={() => listTools().then(setTools).catch(() => {})}
         >
-          ⚠ Load error — click to retry
+          ⚠ Load error
         </div>
       )}
 
@@ -171,27 +199,36 @@ export function Taskbar() {
                   <button
                     className="taskbar-btn w-full"
                     onClick={() => launchTool(tool)}
-                    title={`Launch ${tool.name}`}
+                    title={`New ${tool.name} session`}
                   >
                     <span className="tool-icon">{tool.icon}</span>
                     <span className="tool-label flex-1 text-left">{tool.name}</span>
                     {activeSessions.length > 0 && (
                       <span className="session-badge">{activeSessions.length}</span>
                     )}
+                    <span className="tool-launch-arrow" style={{ fontSize: 9, opacity: 0.4 }}>+</span>
                   </button>
                   {toolSessions.length > 0 && (
-                    <div className="flex flex-col gap-0 pl-4 pr-2 mb-1">
+                    <div className="flex flex-col gap-0 pl-3 pr-1 mb-1">
                       {toolSessions.map((s) => (
-                        <button
-                          key={s.id}
-                          className="session-item"
-                          onClick={() => focusSessionWindow(s.id)}
-                          title={`Switch to session ${s.id.slice(0, 8)}`}
-                        >
-                          <span className={`session-item-dot ${s.active ? 'dot-active' : 'dot-dead'}`} />
-                          <span className="session-item-id">#{s.id.slice(0, 6)}</span>
-                          <span className="session-item-status">{s.active ? 'live' : 'ended'}</span>
-                        </button>
+                        <div key={s.id} className="session-item group">
+                          <button
+                            className="session-item-main"
+                            onClick={() => focusSessionWindow(s.id)}
+                            title={`Focus session ${s.id.slice(0, 8)}`}
+                          >
+                            <span className={`session-item-dot ${s.active ? 'dot-active' : 'dot-dead'}`} />
+                            <span className="session-item-id">#{s.id.slice(0, 6)}</span>
+                            <span className="session-item-status">{s.active ? 'live' : 'ended'}</span>
+                          </button>
+                          <button
+                            className="session-close-btn"
+                            onClick={(e) => { e.stopPropagation(); closeSession(s.id) }}
+                            title="Close session"
+                          >
+                            ×
+                          </button>
+                        </div>
                       ))}
                     </div>
                   )}

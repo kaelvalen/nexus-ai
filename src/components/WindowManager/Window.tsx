@@ -1,5 +1,5 @@
-import { useRef, useCallback, type ReactNode } from 'react'
-import { useWindowStore } from '../../store/windowStore'
+import { useRef, useCallback, useState, type ReactNode } from 'react'
+import { useWindowStore, type SnapPosition } from '../../store/windowStore'
 
 const TASKBAR_WIDTH = 120
 
@@ -24,8 +24,9 @@ export function Window({
   maximized,
   children,
 }: WindowProps) {
-  const { focusWindow, closeWindow, minimizeWindow, maximizeWindow, moveWindow, resizeWindow } =
+  const { focusWindow, closeWindow, minimizeWindow, maximizeWindow, moveWindow, resizeWindow, snapWindow } =
     useWindowStore()
+  const [snapMenuOpen, setSnapMenuOpen] = useState(false)
 
   const dragging = useRef(false)
   const dragStart = useRef({ x: 0, y: 0, winX: 0, winY: 0 })
@@ -100,6 +101,11 @@ export function Window({
     [id, size.width, size.height, maximized, resizeWindow]
   )
 
+  const doSnap = (snap: SnapPosition) => {
+    snapWindow(id, snap)
+    setSnapMenuOpen(false)
+  }
+
   if (minimized) return null
 
   const computedStyle = maximized
@@ -131,7 +137,7 @@ export function Window({
         onDoubleClick={() => maximizeWindow(id)}
       >
         <div className="flex items-center gap-2">
-          <span className="text-primary text-xs font-bold tracking-widest uppercase">
+          <span className="win-title">
             {title}
           </span>
           {maximized && (
@@ -140,34 +146,52 @@ export function Window({
             </span>
           )}
         </div>
-        <div className="flex items-center gap-1">
+        <div className="flex items-center gap-1" onMouseDown={(e) => e.stopPropagation()}>
+          {/* Snap menu */}
+          {!maximized && (
+            <div className="relative">
+              <button
+                className="win-btn win-btn-snap"
+                onClick={(e) => { e.stopPropagation(); setSnapMenuOpen((v) => !v) }}
+                title="Snap window"
+              >
+                ⊞
+              </button>
+              {snapMenuOpen && (
+                <div className="win-snap-menu" onMouseDown={(e) => e.stopPropagation()}>
+                  <div className="win-snap-grid">
+                    <button className="win-snap-cell" onClick={() => doSnap('top-left')} title="Top-left">◰</button>
+                    <button className="win-snap-cell" onClick={() => doSnap('top-right')} title="Top-right">◳</button>
+                    <button className="win-snap-cell win-snap-half-l" onClick={() => doSnap('left')} title="Left half">◧</button>
+                    <button className="win-snap-cell win-snap-half-r" onClick={() => doSnap('right')} title="Right half">◨</button>
+                    <button className="win-snap-cell" onClick={() => doSnap('bottom-left')} title="Bottom-left">◱</button>
+                    <button className="win-snap-cell" onClick={() => doSnap('bottom-right')} title="Bottom-right">◲</button>
+                  </div>
+                  <div className="win-snap-labels">
+                    <span>Snap to position</span>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
           <button
             className="win-btn win-btn-min"
-            onClick={(e) => {
-              e.stopPropagation()
-              minimizeWindow(id)
-            }}
-            title="Minimize"
+            onClick={(e) => { e.stopPropagation(); minimizeWindow(id) }}
+            title="Minimize (Ctrl+M)"
           >
             −
           </button>
           <button
             className="win-btn win-btn-max"
-            onClick={(e) => {
-              e.stopPropagation()
-              maximizeWindow(id)
-            }}
-            title={maximized ? 'Restore' : 'Maximize'}
+            onClick={(e) => { e.stopPropagation(); maximizeWindow(id) }}
+            title={maximized ? 'Restore (Ctrl+Shift+M)' : 'Maximize (Ctrl+Shift+M)'}
           >
             {maximized ? '❐' : '□'}
           </button>
           <button
             className="win-btn win-btn-close"
-            onClick={(e) => {
-              e.stopPropagation()
-              closeWindow(id)
-            }}
-            title="Close"
+            onClick={(e) => { e.stopPropagation(); closeWindow(id) }}
+            title="Close (Ctrl+W)"
           >
             ×
           </button>
@@ -175,7 +199,7 @@ export function Window({
       </div>
 
       {/* Content */}
-      <div className="flex-1 overflow-hidden relative">{children}</div>
+      <div className="flex-1 overflow-hidden relative" onClick={() => setSnapMenuOpen(false)}>{children}</div>
 
       {/* Resize handle — hidden when maximized */}
       {!maximized && (
