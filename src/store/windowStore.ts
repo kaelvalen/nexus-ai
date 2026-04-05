@@ -116,19 +116,21 @@ export const useWindowStore = create<WindowStore>((set, get) => ({
     })),
 
   snapWindow: (id, snap) => {
-    const TASKBAR = 120
-    const vw = window.innerWidth - TASKBAR
-    const vh = window.innerHeight
-    const half = { width: Math.floor(vw / 2), height: vh }
+    const NAV_W = 56
+    const TOP_H = 48
+    const RIBBON_H = 32
+    const vw = window.innerWidth - NAV_W
+    const vh = window.innerHeight - TOP_H - RIBBON_H
+    const half    = { width: Math.floor(vw / 2), height: vh }
     const quarter = { width: Math.floor(vw / 2), height: Math.floor(vh / 2) }
 
     const positions: Record<string, { position: { x: number; y: number }; size: { width: number; height: number } }> = {
-      left:         { position: { x: 0, y: 0 },                size: half },
-      right:        { position: { x: Math.floor(vw / 2), y: 0 }, size: half },
-      'top-left':   { position: { x: 0, y: 0 },                size: quarter },
-      'top-right':  { position: { x: Math.floor(vw / 2), y: 0 }, size: quarter },
-      'bottom-left':  { position: { x: 0, y: Math.floor(vh / 2) },                  size: quarter },
-      'bottom-right': { position: { x: Math.floor(vw / 2), y: Math.floor(vh / 2) }, size: quarter },
+      left:           { position: { x: 0,                    y: 0 },                    size: half },
+      right:          { position: { x: Math.floor(vw / 2),   y: 0 },                    size: half },
+      'top-left':     { position: { x: 0,                    y: 0 },                    size: quarter },
+      'top-right':    { position: { x: Math.floor(vw / 2),   y: 0 },                    size: quarter },
+      'bottom-left':  { position: { x: 0,                    y: Math.floor(vh / 2) },   size: quarter },
+      'bottom-right': { position: { x: Math.floor(vw / 2),   y: Math.floor(vh / 2) },   size: quarter },
     }
 
     const target = positions[snap]

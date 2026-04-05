@@ -1,3 +1,4 @@
+mod fs_commands;
 mod process_manager;
 mod tools;
 mod workflow;
@@ -24,6 +25,8 @@ pub fn run() {
             process_manager::list_sessions,
             workflow::execute_workflow,
             workflow::cancel_workflow,
+            fs_commands::list_dir,
+            fs_commands::read_text_file,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

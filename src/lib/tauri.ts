@@ -71,6 +71,17 @@ export interface WorkflowCancelled {
   workflow_id: string
 }
 
+// ── Filesystem commands ───────────────────────────────────────────────────────
+export interface FsDirEntry {
+  name: string
+  path: string
+  is_dir: boolean
+  size: number | null
+}
+
+export const listDir = (path: string) => invoke<FsDirEntry[]>('list_dir', { path })
+export const readTextFile = (path: string) => invoke<string>('read_text_file', { path })
+
 // ── Tool commands ────────────────────────────────────────────────────────────
 export const listTools = () => invoke<ToolDef[]>('list_tools')
 

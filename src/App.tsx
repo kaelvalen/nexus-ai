@@ -5,6 +5,13 @@ import { TopBar } from './components/Nav/TopBar'
 import { TelemetryRibbon } from './components/Nav/TelemetryRibbon'
 import { CommandPalette } from './components/CommandPalette/CommandPalette'
 import { ToastContainer } from './components/Toast/ToastContainer'
+import { KernelPanel } from './components/Panels/KernelPanel'
+import { BuffersPanel } from './components/Panels/BuffersPanel'
+import { SessionsPanel } from './components/Panels/SessionsPanel'
+import { NetworkPanel } from './components/Panels/NetworkPanel'
+import { DebugPanel } from './components/Panels/DebugPanel'
+import { TelemetryPanel } from './components/Panels/TelemetryPanel'
+import { CodePanel } from './components/Panels/CodePanel'
 import { useWindowStore } from './store/windowStore'
 
 export default function App() {
@@ -62,22 +69,34 @@ export default function App() {
         onOpenPalette={() => setPaletteOpen(true)}
       />
 
-      {/* Main floating-window workspace */}
+      {/* Main workspace */}
       <main className="workspace">
         <div className="workspace-grid" />
-        <WindowManager />
 
-        {!hasWindows && (
-          <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
-            <div className="nexus-splash">
-              <div className="splash-logo">NEXUS</div>
-              <div className="splash-sub">AI Developer OS</div>
-              <div className="splash-hint">
-                Press <kbd className="splash-kbd">Ctrl+K</kbd> or click a tool in the sidebar
+        {/* Floating windows — always mounted so terminals keep running */}
+        <div style={{ display: activeSection === 'kernel' ? 'block' : 'none', position: 'absolute', inset: 0 }}>
+          <WindowManager />
+          {hasWindows ? null : (
+            <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
+              <div className="nexus-splash">
+                <div className="splash-logo">NEXUS</div>
+                <div className="splash-sub">AI Developer OS</div>
+                <div className="splash-hint">
+                  Press <kbd className="splash-kbd">Ctrl+K</kbd> or click a tool in the sidebar
+                </div>
               </div>
             </div>
-          </div>
-        )}
+          )}
+        </div>
+
+        {/* Section panels */}
+        {activeSection === 'buffers'   && <BuffersPanel   onSectionChange={setActiveSection} />}
+        {activeSection === 'sessions'  && <SessionsPanel  onSectionChange={setActiveSection} />}
+        {activeSection === 'code'      && <CodePanel />}
+        {activeSection === 'debug'     && <DebugPanel />}
+        {activeSection === 'network'   && <NetworkPanel />}
+        {activeSection === 'telemetry' && <TelemetryPanel />}
+        {activeSection === 'kernel-panel' && <KernelPanel onSectionChange={setActiveSection} />}
       </main>
 
       {/* Telemetry ribbon */}
