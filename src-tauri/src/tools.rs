@@ -122,6 +122,7 @@ pub fn get_tool_definitions() -> Vec<ToolDef> {
     ]
 }
 
+#[allow(dead_code)]
 pub fn get_tool_def_with_overrides(id: &str, custom_tools: &[ToolDef]) -> Result<ToolDef, String> {
     // Check custom tools first
     if let Some(t) = custom_tools.iter().find(|t| t.id == id) {

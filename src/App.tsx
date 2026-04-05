@@ -12,12 +12,16 @@ import { NetworkPanel } from './components/Panels/NetworkPanel'
 import { DebugPanel } from './components/Panels/DebugPanel'
 import { TelemetryPanel } from './components/Panels/TelemetryPanel'
 import { CodePanel } from './components/Panels/CodePanel'
+import { GitPanel } from './components/Panels/GitPanel'
 import { useWindowStore } from './store/windowStore'
+import { useSessionStore } from './store/sessionStore'
+import { onToolExit } from './lib/tauri'
 
 export default function App() {
   const [paletteOpen, setPaletteOpen] = useState(false)
   const [activeSection, setActiveSection] = useState('kernel')
   const { windows, closeWindow, focusWindow, minimizeWindow } = useWindowStore()
+  const { setActive } = useSessionStore()
 
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
@@ -51,6 +55,13 @@ export default function App() {
     return () => window.removeEventListener('keydown', handler)
   }, [windows, paletteOpen, closeWindow, focusWindow, minimizeWindow])
 
+  // Mark sessions inactive when their process exits
+  useEffect(() => {
+    let unlisten: (() => void) | null = null
+    onToolExit((e) => setActive(e.session_id, false)).then((fn) => { unlisten = fn })
+    return () => { unlisten?.() }
+  }, [setActive])
+
   const hasWindows = windows.filter(w => !w.minimized).length > 0
 
   return (
@@ -71,10 +82,9 @@ export default function App() {
 
       {/* Main workspace */}
       <main className="workspace">
-        <div className="workspace-grid" />
-
         {/* Floating windows — always mounted so terminals keep running */}
         <div style={{ display: activeSection === 'kernel' ? 'block' : 'none', position: 'absolute', inset: 0 }}>
+          <div className="workspace-grid" />
           <WindowManager />
           {hasWindows ? null : (
             <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
@@ -90,12 +100,13 @@ export default function App() {
         </div>
 
         {/* Section panels */}
-        {activeSection === 'buffers'   && <BuffersPanel   onSectionChange={setActiveSection} />}
-        {activeSection === 'sessions'  && <SessionsPanel  onSectionChange={setActiveSection} />}
-        {activeSection === 'code'      && <CodePanel />}
-        {activeSection === 'debug'     && <DebugPanel />}
-        {activeSection === 'network'   && <NetworkPanel />}
-        {activeSection === 'telemetry' && <TelemetryPanel />}
+        {activeSection === 'buffers'      && <BuffersPanel   onSectionChange={setActiveSection} />}
+        {activeSection === 'sessions'     && <SessionsPanel  onSectionChange={setActiveSection} />}
+        {activeSection === 'code'         && <CodePanel />}
+        {activeSection === 'debug'        && <DebugPanel />}
+        {activeSection === 'network'      && <NetworkPanel />}
+        {activeSection === 'telemetry'    && <TelemetryPanel />}
+        {activeSection === 'git'          && <GitPanel />}
         {activeSection === 'kernel-panel' && <KernelPanel onSectionChange={setActiveSection} />}
       </main>
 

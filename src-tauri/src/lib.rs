@@ -1,4 +1,5 @@
 mod fs_commands;
+mod git_commands;
 mod process_manager;
 mod tools;
 mod workflow;
@@ -27,6 +28,15 @@ pub fn run() {
             workflow::cancel_workflow,
             fs_commands::list_dir,
             fs_commands::read_text_file,
+            git_commands::git_status,
+            git_commands::git_log,
+            git_commands::git_diff,
+            git_commands::git_stage,
+            git_commands::git_unstage,
+            git_commands::git_commit,
+            git_commands::git_push,
+            git_commands::git_pull,
+            git_commands::git_discard,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

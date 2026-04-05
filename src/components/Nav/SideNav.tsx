@@ -127,11 +127,12 @@ export function SideNav({ activeSection, onSectionChange, onOpenPalette }: Props
   const activeSessions = Object.values(sessions).filter((s) => s.active)
 
   const NAV_ITEMS = [
-    { id: 'kernel',   icon: 'terminal',   title: 'Terminal' },
-    { id: 'code',     icon: 'code',        title: 'Code' },
-    { id: 'debug',    icon: 'bug_report',  title: 'Debugger' },
-    { id: 'network',  icon: 'hub',         title: 'Network' },
-    { id: 'telemetry',icon: 'monitoring',  title: 'Telemetry' },
+    { id: 'kernel',   icon: 'terminal',        title: 'Terminal' },
+    { id: 'code',     icon: 'code',             title: 'Code' },
+    { id: 'git',      icon: 'account_tree',     title: 'Source Control' },
+    { id: 'debug',    icon: 'bug_report',       title: 'Debugger' },
+    { id: 'network',  icon: 'hub',              title: 'Network' },
+    { id: 'telemetry',icon: 'monitoring',       title: 'Telemetry' },
   ]
 
   return (

@@ -71,6 +71,45 @@ export interface WorkflowCancelled {
   workflow_id: string
 }
 
+// ── Git commands ──────────────────────────────────────────────────────────────
+export interface GitStatusEntry {
+  xy: string
+  path: string
+  staged: boolean
+  kind: string
+}
+
+export interface GitStatus {
+  branch: string
+  upstream: string | null
+  ahead: number
+  behind: number
+  entries: GitStatusEntry[]
+  is_repo: boolean
+}
+
+export interface GitLogEntry {
+  hash: string
+  short_hash: string
+  author: string
+  date: string
+  message: string
+}
+
+export interface GitLog {
+  entries: GitLogEntry[]
+}
+
+export const gitStatus   = (cwd: string)                        => invoke<GitStatus>('git_status', { cwd })
+export const gitLog      = (cwd: string, limit?: number)        => invoke<GitLog>('git_log', { cwd, limit: limit ?? 30 })
+export const gitDiff     = (cwd: string, path?: string)         => invoke<string>('git_diff', { cwd, path: path ?? null })
+export const gitStage    = (cwd: string, path: string)          => invoke<void>('git_stage', { cwd, path })
+export const gitUnstage  = (cwd: string, path: string)          => invoke<void>('git_unstage', { cwd, path })
+export const gitCommit   = (cwd: string, message: string)       => invoke<string>('git_commit', { cwd, message })
+export const gitPush     = (cwd: string)                        => invoke<string>('git_push', { cwd })
+export const gitPull     = (cwd: string)                        => invoke<string>('git_pull', { cwd })
+export const gitDiscard  = (cwd: string, path: string)          => invoke<void>('git_discard', { cwd, path })
+
 // ── Filesystem commands ───────────────────────────────────────────────────────
 export interface FsDirEntry {
   name: string

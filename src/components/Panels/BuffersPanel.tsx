@@ -41,7 +41,7 @@ export function BuffersPanel({ onSectionChange }: Props) {
                   </div>
                   <div className="buffer-card-meta">
                     <span>{win.component.toUpperCase()}</span>
-                    <span>{win.size.width}×{win.size.height}px</span>
+                    <span>{win.size.width}×{win.size.height}</span>
                   </div>
                   <button className="buffer-restore-btn" onClick={() => restoreAndFocus(win.id)}>
                     <span className="mat mat-sm">flip_to_front</span>
@@ -72,8 +72,7 @@ export function BuffersPanel({ onSectionChange }: Props) {
                   <div className="buffer-card-meta">
                     <span>{win.component.toUpperCase()}</span>
                     <span>Z:{win.zIndex}</span>
-                    <span>{win.size.width}×{win.size.height}</span>
-                    <span>{win.maximized ? 'MAXIMIZED' : `@${win.position.x},${win.position.y}`}</span>
+                    <span>{win.maximized ? 'MAX' : `${win.size.width}×${win.size.height}`}</span>
                   </div>
                   <button className="buffer-focus-btn" onClick={() => { focusWindow(win.id); onSectionChange('kernel') }}>
                     <span className="mat mat-sm">open_in_full</span>
